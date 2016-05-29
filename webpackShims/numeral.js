@@ -17,4 +17,30 @@
  * under the License.
  */
 
-module.exports = require('@elastic/numeral');
+var numeral = module.exports = require('@elastic/numeral');
+var locale = window.navigator.userLanguage || window.navigator.language || 'en';
+
+if (locale === 'sv') {
+  var languageData = {
+    delimiters: {
+      thousands: ' ',
+      decimal: ','
+    },
+    abbreviations: {
+      thousand: 'k',
+      million: 'M',
+      billion: 'G',
+      trillion: 'T'
+    },
+    ordinal: function (number) {
+      var str = number.toString();
+      var endsWith = str[str.length - 1];
+      return (endsWith === '1' || endsWith === '2') ? ':a' : ':e';
+    },
+    currency: {
+      symbol: 'SEK'
+    }
+  };
+  numeral.language(locale, languageData);
+  numeral.language(locale);
+}

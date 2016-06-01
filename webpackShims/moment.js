@@ -1,5 +1,7 @@
 var moment = window.moment = module.exports = require('../node_modules/moment/min/moment.min.js');
-var locale = window.navigator.userLanguage || window.navigator.language || 'en';
+//var locale = window.navigator.userLanguage || window.navigator.language || 'en';
+var localization = require('localization');
+
 var sv = moment.defineLocale('sv', {
   months: 'januari_februari_mars_april_maj_juni_juli_augusti_september_oktober_november_december'.split('_'),
   monthsShort: 'jan_feb_mar_apr_maj_jun_jul_aug_sep_okt_nov_dec'.split('_'),
@@ -52,9 +54,10 @@ var sv = moment.defineLocale('sv', {
   }
 });
 
+console.log('language culture', localization.getLanguageCulture(), 'formatting culture', localization.getFormattingCulture());
 
-if (locale === 'sv') {
-  //require('imports?this=>window!../node_modules/moment/locale/sv.js');
+let locale = localization.getFormattingCulture();
+if (locale === 'sv-SE') {
   moment.locale('sv');
   console.log('moment locale', moment.locale());
 }

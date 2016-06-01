@@ -1,7 +1,9 @@
 var numeral = module.exports = require('@spalger/numeral');
-var locale = window.navigator.userLanguage || window.navigator.language || 'en';
+//var locale = window.navigator.userLanguage || window.navigator.language || 'en';
+var localization = require('localization');
 
-if (locale === 'sv') {
+let locale = localization.getFormattingCulture();
+if (locale === 'sv-SE') {
   var languageData = {
     delimiters: {
       thousands: ' ',

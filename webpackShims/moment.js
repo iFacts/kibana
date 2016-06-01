@@ -39,7 +39,7 @@ var sv = moment.defineLocale('sv', {
   },
   ordinalParse: /\d{1,2}(e|a)/,
   ordinal: function (number) {
-    var b = number % 10;
+    var b = number % 10,
       output = (~~(number % 100 / 10) === 1) ? 'e' :
         (b === 1) ? 'a' :
           (b === 2) ? 'a' :

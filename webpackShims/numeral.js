@@ -3,7 +3,7 @@ var numeral = module.exports = require('@spalger/numeral');
 var localization = require('localization');
 
 let locale = localization.getFormattingCulture();
-if (locale === 'sv-SE') {
+if (locale === 'sv-se') {
   var languageData = {
     delimiters: {
       thousands: ' ',

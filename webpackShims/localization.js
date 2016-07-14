@@ -1,10 +1,10 @@
 
 let localization = {
   getFormattingCulture: function () {
-    return getUrlParameter('formattingCulture') || 'en';
+    return (getUrlParameter('formattingCulture') || 'en').toLowerCase();
   },
   getLanguageCulture: function () {
-    return getUrlParameter('languageCulture') || 'en';
+    return (getUrlParameter('languageCulture') || 'en').toLowerCase();
   },
 };
 module.exports = localization;
@@ -14,7 +14,7 @@ function getUrlParameter(name, url) {
     url = window.location.href;
   }
   name = name.replace(/[\[\]]/g, '\\$&');
-  let regex = new RegExp('[?&]' + name + '(=([^&#]*)|&|#|$)');
+  let regex = new RegExp('[?&]' + name + '(=([^&#]*)|&|#|$)', 'i');
   let results = regex.exec(url);
   if (!results) {
     return null;

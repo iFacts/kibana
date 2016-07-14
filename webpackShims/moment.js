@@ -57,7 +57,7 @@ var sv = moment.defineLocale('sv', {
 console.log('language culture', localization.getLanguageCulture(), 'formatting culture', localization.getFormattingCulture());
 
 let locale = localization.getFormattingCulture();
-if (locale === 'sv-SE') {
+if (locale === 'sv-se') {
   moment.locale('sv');
   console.log('moment locale', moment.locale());
 }

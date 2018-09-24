@@ -1,129 +1,319 @@
+/*
+ * Licensed to Elasticsearch B.V. under one or more contributor
+ * license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright
+ * ownership. Elasticsearch B.V. licenses this file to you under
+ * the Apache License, Version 2.0 (the "License"); you may
+ * not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
+/**
+ * @name Vis
+ *
+ * @description This class consists of aggs, params, listeners, title, and type.
+ *  - Aggs: Instances of AggConfig.
+ *  - Params: The settings in the Options tab.
+ *
+ * Not to be confused with vislib/vis.js.
+ */
+
+import { EventEmitter } from 'events';
 import _ from 'lodash';
-import AggTypesIndexProvider from 'ui/agg_types/index';
-import RegistryVisTypesProvider from 'ui/registry/vis_types';
-import VisAggConfigsProvider from 'ui/vis/agg_configs';
-export default function VisFactory(Notifier, Private) {
-  let aggTypes = Private(AggTypesIndexProvider);
-  let visTypes = Private(RegistryVisTypesProvider);
-  let AggConfigs = Private(VisAggConfigsProvider);
+import { VisTypesRegistryProvider } from '../registry/vis_types';
+import { AggConfigs } from './agg_configs';
+import { PersistedState } from '../persisted_state';
+import { onBrushEvent } from '../utils/brush_event';
+import { FilterBarQueryFilterProvider } from '../filter_bar/query_filter';
+import { FilterBarClickHandlerProvider } from '../filter_bar/filter_bar_click_handler';
+import { updateVisualizationConfig } from './vis_update';
+import { SearchSourceProvider } from '../courier/search_source';
+import { SavedObjectsClientProvider } from '../saved_objects';
+import { timefilter } from 'ui/timefilter';
 
-  let notify = new Notifier({
-    location: 'Vis'
+import { Inspector } from '../inspector';
+import { RequestAdapter, DataAdapter } from '../inspector/adapters';
+
+const getTerms = (table, columnIndex, rowIndex) => {
+  if (rowIndex === -1) {
+    return [];
+  }
+
+  // get only rows where cell value matches current row for all the fields before columnIndex
+  const rows = table.rows.filter(row => {
+    return table.columns.every((column, i) => {
+      return row[column.id] === table.rows[rowIndex][column.id] || i >= columnIndex;
+    });
   });
+  const terms = rows.map(row => row[columnIndex]);
 
-  function Vis(indexPattern, state) {
-    state = state || {};
+  return [...new Set(terms.filter(term => {
+    const notOther = term !== '__other__';
+    const notMissing = term !== '__missing__';
+    return notOther && notMissing;
+  }))];
+};
 
-    if (_.isString(state)) {
-      state = {
-        type: state
+export function VisProvider(Private, indexPatterns, getAppState) {
+  const visTypes = Private(VisTypesRegistryProvider);
+  const queryFilter = Private(FilterBarQueryFilterProvider);
+  const filterBarClickHandler = Private(FilterBarClickHandlerProvider);
+  const SearchSource = Private(SearchSourceProvider);
+  const savedObjectsClient = Private(SavedObjectsClientProvider);
+
+  class Vis extends EventEmitter {
+    constructor(indexPattern, visState) {
+      super();
+      visState = visState || {};
+
+      if (_.isString(visState)) {
+        visState = {
+          type: visState
+        };
+      }
+      this.indexPattern = indexPattern;
+      this._setUiState(new PersistedState());
+      this.setCurrentState(visState);
+      this.setState(this.getCurrentState(), false);
+
+      // Session state is for storing information that is transitory, and will not be saved with the visualization.
+      // For instance, map bounds, which depends on the view port, browser window size, etc.
+      this.sessionState = {};
+
+      this.API = {
+        savedObjectsClient: savedObjectsClient,
+        SearchSource: SearchSource,
+        indexPatterns: indexPatterns,
+        timeFilter: timefilter,
+        queryFilter: queryFilter,
+        events: {
+          // the filter method will be removed in the near feature
+          // you should rather use addFilter method below
+          filter: (event) => {
+            const appState = getAppState();
+            filterBarClickHandler(appState)(event);
+          },
+          addFilter: (data, columnIndex, rowIndex, cellValue) => {
+            const { aggConfig, id: columnId } = data.columns[columnIndex];
+            let filter = [];
+            const value = rowIndex > -1 ? data.rows[rowIndex][columnId] : cellValue;
+            if (!value) {
+              return;
+            }
+            if (aggConfig.type.name === 'terms' && aggConfig.params.otherBucket) {
+              const terms = getTerms(data, columnIndex, rowIndex);
+              filter = aggConfig.createFilter(value, { terms });
+            } else {
+              filter = aggConfig.createFilter(value);
+            }
+            queryFilter.addFilters(filter);
+          }, brush: (event) => {
+            onBrushEvent(event, getAppState());
+          }
+        },
+        inspectorAdapters: this._getActiveInspectorAdapters(),
+        getAppState,
       };
     }
 
-    this.indexPattern = indexPattern;
-
-    // http://aphyr.com/data/posts/317/state.gif
-    this.setState(state);
-  }
-
-  Vis.convertOldState = function (type, oldState) {
-    if (!type || _.isString(type)) {
-      type = visTypes.byName[type || 'histogram'];
+    /**
+     * Open the inspector for this visualization.
+     * @return {InspectorSession} the handler for the session of this inspector.
+     */
+    openInspector() {
+      return Inspector.open(this.API.inspectorAdapters, {
+        title: this.title
+      });
     }
 
-    let schemas = type.schemas;
+    hasInspector() {
+      return Inspector.isAvailable(this.API.inspectorAdapters);
+    }
 
-    let aggs = _.transform(oldState, function (newConfigs, oldConfigs, oldGroupName) {
-      let schema = schemas.all.byName[oldGroupName];
+    /**
+     * Returns an object of all inspectors for this vis object.
+     * This must only be called after this.type has properly be initialized,
+     * since we need to read out data from the the vis type to check which
+     * inspectors are available.
+     */
+    _getActiveInspectorAdapters() {
+      const adapters = {};
+      const { inspectorAdapters: typeAdapters } = this.type;
 
-      if (!schema) {
-        notify.log('unable to match old schema', oldGroupName, 'to a new schema');
-        return;
+      // Add the requests inspector adapters if the vis type explicitly requested it via
+      // inspectorAdapters.requests: true in its definition or if it's using the courier
+      // request handler, since that will automatically log its requests.
+      if (typeAdapters && typeAdapters.requests || this.type.requestHandler === 'courier') {
+        adapters.requests = new RequestAdapter();
       }
 
-      oldConfigs.forEach(function (oldConfig) {
-        let agg = {
-          schema: schema.name,
-          type: oldConfig.agg,
-        };
+      // Add the data inspector adapter if the vis type requested it or if the
+      // vis is using courier, since we know that courier supports logging
+      // its data.
+      if (typeAdapters && typeAdapters.data || this.type.requestHandler === 'courier') {
+        adapters.data = new DataAdapter();
+      }
 
-        let aggType = aggTypes.byName[agg.type];
-        if (!aggType) {
-          notify.log('unable to find an agg type for old confg', oldConfig);
-          return;
+      // Add all inspectors, that are explicitly registered with this vis type
+      if (typeAdapters && typeAdapters.custom) {
+        Object.entries(typeAdapters.custom).forEach(([key, Adapter]) => {
+          adapters[key] = new Adapter();
+        });
+      }
+
+      return adapters;
+    }
+
+    setCurrentState(state) {
+      this.title = state.title || '';
+      const type = state.type || this.type;
+      if (_.isString(type)) {
+        this.type = visTypes.byName[type];
+        if (!this.type) {
+          throw new Error(`Invalid type "${type}"`);
         }
+      } else {
+        this.type = type;
+      }
 
-        agg.params = _.pick(oldConfig, _.keys(aggType.params.byName));
+      this.params = _.defaults({},
+        _.cloneDeep(state.params || {}),
+        _.cloneDeep(this.type.visConfig.defaults || {})
+      );
 
-        newConfigs.push(agg);
+      updateVisualizationConfig(state.params, this.params);
+
+      this.aggs = new AggConfigs(this.indexPattern, state.aggs, this.type.schemas.all);
+    }
+
+    setState(state, updateCurrentState = true) {
+      this._state = _.cloneDeep(state);
+      if (updateCurrentState) {
+        this.setCurrentState(this._state);
+      }
+    }
+
+    updateState() {
+      this.setState(this.getCurrentState(true));
+      this.emit('update');
+    }
+
+    forceReload() {
+      this.emit('reload');
+    }
+
+    getCurrentState(includeDisabled) {
+      return {
+        title: this.title,
+        type: this.type.name,
+        params: _.cloneDeep(this.params),
+        aggs: this.aggs
+          .map(agg => agg.toJSON())
+          .filter(agg => includeDisabled || agg.enabled)
+          .filter(Boolean)
+      };
+    }
+
+    getSerializableState(state) {
+      return {
+        title: state.title,
+        type: state.type,
+        params: _.cloneDeep(state.params),
+        aggs: state.aggs
+          .map(agg => agg.toJSON())
+          .filter(agg => agg.enabled)
+          .filter(Boolean)
+      };
+    }
+
+    copyCurrentState(includeDisabled = false) {
+      const state = this.getCurrentState(includeDisabled);
+      state.aggs = new AggConfigs(this.indexPattern, state.aggs, this.type.schemas.all);
+      return state;
+    }
+
+    getStateInternal(includeDisabled) {
+      return {
+        title: this._state.title,
+        type: this._state.type,
+        params: this._state.params,
+        aggs: this._state.aggs
+          .filter(agg => includeDisabled || agg.enabled)
+      };
+    }
+
+    getEnabledState() {
+      return this.getStateInternal(false);
+    }
+
+    getAggConfig() {
+      return this.aggs.clone({ enabledOnly: true });
+    }
+
+    getState() {
+      return this.getStateInternal(true);
+    }
+
+    isHierarchical() {
+      if (_.isFunction(this.type.hierarchicalData)) {
+        return !!this.type.hierarchicalData(this);
+      } else {
+        return !!this.type.hierarchicalData;
+      }
+    }
+
+    hasSchemaAgg(schemaName, aggTypeName) {
+      const aggs = this.aggs.bySchemaName[schemaName] || [];
+      return aggs.some(function (agg) {
+        if (!agg.type || !agg.type.name) return false;
+        return agg.type.name === aggTypeName;
       });
-    }, []);
+    }
 
-    return {
-      type: type,
-      aggs: aggs
-    };
-  };
+    hasUiState() {
+      return !!this.__uiState;
+    }
+
+    /***
+     * this should not be used outside of visualize
+     * @param uiState
+     * @private
+     */
+    _setUiState(uiState) {
+      if (uiState instanceof PersistedState) {
+        this.__uiState = uiState;
+      }
+    }
+
+    getUiState() {
+      return this.__uiState;
+    }
+
+    /**
+     * Currently this is only used to extract map-specific information
+     * (e.g. mapZoom, mapCenter).
+     */
+    uiStateVal(key, val) {
+      if (this.hasUiState()) {
+        if (_.isUndefined(val)) {
+          return this.__uiState.get(key);
+        }
+        return this.__uiState.set(key, val);
+      }
+      return val;
+    }
+  }
 
   Vis.prototype.type = 'histogram';
 
-  Vis.prototype.setState = function (state) {
-    this.title = state.title || '';
-    this.type = state.type || this.type;
-    if (_.isString(this.type)) this.type = visTypes.byName[this.type];
-
-    this.listeners = _.assign({}, state.listeners, this.type.listeners);
-    this.params = _.defaults({},
-      _.cloneDeep(state.params || {}),
-      _.cloneDeep(this.type.params.defaults || {})
-    );
-
-    this.aggs = new AggConfigs(this, state.aggs);
-  };
-
-  Vis.prototype.getState = function () {
-    return {
-      title: this.title,
-      type: this.type.name,
-      params: this.params,
-      aggs: this.aggs.map(function (agg) {
-        return agg.toJSON();
-      }).filter(Boolean),
-      listeners: this.listeners
-    };
-  };
-
-  Vis.prototype.createEditableVis = function () {
-    return this._editableVis || (this._editableVis = this.clone());
-  };
-
-  Vis.prototype.getEditableVis = function () {
-    return this._editableVis || undefined;
-  };
-
-  Vis.prototype.clone = function () {
-    return new Vis(this.indexPattern, this.getState());
-  };
-
-  Vis.prototype.requesting = function () {
-    _.invoke(this.aggs.getRequestAggs(), 'requesting');
-  };
-
-  Vis.prototype.isHierarchical = function () {
-    if (_.isFunction(this.type.hierarchicalData)) {
-      return !!this.type.hierarchicalData(this);
-    } else {
-      return !!this.type.hierarchicalData;
-    }
-  };
-
-  Vis.prototype.hasSchemaAgg = function (schemaName, aggTypeName) {
-    let aggs = this.aggs.bySchemaName[schemaName] || [];
-    return aggs.some(function (agg) {
-      if (!agg.type || !agg.type.name) return false;
-      return agg.type.name === aggTypeName;
-    });
-  };
-
   return Vis;
-};
+}

@@ -1,15 +1,31 @@
+/*
+ * Licensed to Elasticsearch B.V. under one or more contributor
+ * license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright
+ * ownership. Elasticsearch B.V. licenses this file to you under
+ * the Apache License, Version 2.0 (the "License"); you may
+ * not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 import d3 from 'd3';
-import angular from 'angular';
 import expect from 'expect.js';
 import ngMock from 'ng_mock';
 import _ from 'lodash';
 
-import woahLotsOfVariables from 'fixtures/vislib/mock_data/date_histogram/_series';
-import notQuiteEnoughVariables from 'fixtures/vislib/mock_data/not_enough_data/_one_point';
 import $ from 'jquery';
 import FixturesVislibVisFixtureProvider from 'fixtures/vislib/_vis_fixture';
-import PersistedStatePersistedStateProvider from 'ui/persisted_state/persisted_state';
-let someOtherVariables = {
+import '../../../persisted_state';
+const dataTypesArray = {
   'series pos': require('fixtures/vislib/mock_data/date_histogram/_series'),
   'series pos neg': require('fixtures/vislib/mock_data/date_histogram/_series_pos_neg'),
   'series neg': require('fixtures/vislib/mock_data/date_histogram/_series_neg'),
@@ -18,61 +34,29 @@ let someOtherVariables = {
   'stackedSeries': require('fixtures/vislib/mock_data/date_histogram/_stacked_series')
 };
 
-let visLibParams = {
+const visLibParams = {
   type: 'area',
   addLegend: true,
-  addTooltip: true
+  addTooltip: true,
+  mode: 'stacked'
 };
 
 
-_.forOwn(someOtherVariables, function (variablesAreCool, imaVariable) {
-  describe('Vislib Area Chart Test Suite for ' + imaVariable + ' Data', function () {
+_.forOwn(dataTypesArray, function (dataType, dataTypeName) {
+  describe('Vislib Area Chart Test Suite for ' + dataTypeName + ' Data', function () {
     let vis;
     let persistedState;
 
     beforeEach(ngMock.module('kibana'));
-    beforeEach(ngMock.inject(function (Private) {
+    beforeEach(ngMock.inject(function (Private, $injector) {
       vis = Private(FixturesVislibVisFixtureProvider)(visLibParams);
-      persistedState = new (Private(PersistedStatePersistedStateProvider))();
+      persistedState = new ($injector.get('PersistedState'))();
       vis.on('brush', _.noop);
-      vis.render(variablesAreCool, persistedState);
+      vis.render(dataType, persistedState);
     }));
 
     afterEach(function () {
-      $(vis.el).remove();
-      vis = null;
-    });
-
-    describe('checkIfEnoughData method throws an error when not enough data', function () {
-      beforeEach(function () {
-        ngMock.inject(function () {
-          vis.render(notQuiteEnoughVariables, persistedState);
-        });
-      });
-
-      it('should throw a Not Enough Data Error', function () {
-        vis.handler.charts.forEach(function (chart) {
-          expect(function () {
-            chart.checkIfEnoughData();
-          }).to.throwError();
-        });
-      });
-    });
-
-    describe('checkIfEnoughData method should not throw an error when enough data', function () {
-      beforeEach(function () {
-        ngMock.inject(function () {
-          vis.render(woahLotsOfVariables, persistedState);
-        });
-      });
-
-      it('should not throw a Not Enough Data Error', function () {
-        vis.handler.charts.forEach(function (chart) {
-          expect(function () {
-            chart.checkIfEnoughData();
-          }).to.not.throwError();
-        });
-      });
+      vis.destroy();
     });
 
     describe('stackData method', function () {
@@ -81,10 +65,10 @@ _.forOwn(someOtherVariables, function (variablesAreCool, imaVariable) {
 
       beforeEach(function () {
         vis.handler.charts.forEach(function (chart) {
-          stackedData = chart.stackData(chart.chartData);
+          stackedData = chart.chartData;
 
-          isStacked = stackedData.every(function (arr) {
-            return arr.every(function (d) {
+          isStacked = stackedData.series.every(function (arr) {
+            return arr.values.every(function (d) {
               return _.isNumber(d.y0);
             });
           });
@@ -100,6 +84,28 @@ _.forOwn(someOtherVariables, function (variablesAreCool, imaVariable) {
       it('should append a area paths', function () {
         vis.handler.charts.forEach(function (chart) {
           expect($(chart.chartEl).find('path').length).to.be.greaterThan(0);
+        });
+      });
+    });
+
+    describe('addPathEvents method', function () {
+      let path;
+      let d3selectedPath;
+      let onMouseOver;
+
+      beforeEach(ngMock.inject(function () {
+        vis.handler.charts.forEach(function (chart) {
+          path = $(chart.chartEl).find('path')[0];
+          d3selectedPath = d3.select(path)[0][0];
+
+          // d3 instance of click and hover
+          onMouseOver = (!!d3selectedPath.__onmouseover);
+        });
+      }));
+
+      it('should attach a hover event', function () {
+        vis.handler.charts.forEach(function () {
+          expect(onMouseOver).to.be(true);
         });
       });
     });
@@ -158,12 +164,12 @@ _.forOwn(someOtherVariables, function (variablesAreCool, imaVariable) {
 
       it('should not draw circles where d.y === 0', function () {
         vis.handler.charts.forEach(function (chart) {
-          let series = chart.chartData.series;
-          let isZero = series.some(function (d) {
+          const series = chart.chartData.series;
+          const isZero = series.some(function (d) {
             return d.y === 0;
           });
-          let circles = $.makeArray($(chart.chartEl).find('circle'));
-          let isNotDrawn = circles.some(function (d) {
+          const circles = $.makeArray($(chart.chartEl).find('circle'));
+          const isNotDrawn = circles.some(function (d) {
             return d.__data__.y === 0;
           });
 
@@ -183,16 +189,17 @@ _.forOwn(someOtherVariables, function (variablesAreCool, imaVariable) {
 
       it('should return a yMin and yMax', function () {
         vis.handler.charts.forEach(function (chart) {
-          let yAxis = chart.handler.yAxis;
+          const yAxis = chart.handler.valueAxes[0];
+          const domain = yAxis.getScale().domain();
 
-          expect(yAxis.domain[0]).to.not.be(undefined);
-          expect(yAxis.domain[1]).to.not.be(undefined);
+          expect(domain[0]).to.not.be(undefined);
+          expect(domain[1]).to.not.be(undefined);
         });
       });
 
       it('should render a zero axis line', function () {
         vis.handler.charts.forEach(function (chart) {
-          let yAxis = chart.handler.yAxis;
+          const yAxis = chart.handler.valueAxes[0];
 
           if (yAxis.yMin < 0 && yAxis.yMax > 0) {
             expect($(chart.chartEl).find('line.zero-line').length).to.be(1);
@@ -201,34 +208,20 @@ _.forOwn(someOtherVariables, function (variablesAreCool, imaVariable) {
       });
     });
 
-    describe('containerTooSmall error', function () {
-      beforeEach(function () {
-        $(vis.el).height(0);
-        $(vis.el).width(0);
-      });
-
-      it('should throw an error', function () {
-        vis.handler.charts.forEach(function (chart) {
-          expect(function () {
-            chart.render();
-          }).to.throwError();
-        });
-      });
-    });
-
     describe('defaultYExtents is true', function () {
       beforeEach(function () {
-        vis._attr.defaultYExtents = true;
-        vis.render(variablesAreCool, persistedState);
+        vis.visConfigArgs.defaultYExtents = true;
+        vis.render(dataType, persistedState);
       });
 
       it('should return yAxis extents equal to data extents', function () {
         vis.handler.charts.forEach(function (chart) {
-          let yAxis = chart.handler.yAxis;
-          let yVals = [vis.handler.data.getYMin(), vis.handler.data.getYMax()];
-
-          expect(yAxis.domain[0]).to.equal(yVals[0]);
-          expect(yAxis.domain[1]).to.equal(yVals[1]);
+          const yAxis = chart.handler.valueAxes[0];
+          const min = vis.handler.valueAxes[0].axisScale.getYMin();
+          const max = vis.handler.valueAxes[0].axisScale.getYMax();
+          const domain = yAxis.getScale().domain();
+          expect(domain[0]).to.equal(min);
+          expect(domain[1]).to.equal(max);
         });
       });
     });

@@ -1,3 +1,22 @@
+/*
+ * Licensed to Elasticsearch B.V. under one or more contributor
+ * license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright
+ * ownership. Elasticsearch B.V. licenses this file to you under
+ * the Apache License, Version 2.0 (the "License"); you may
+ * not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 import _ from 'lodash';
 
 /**
@@ -13,7 +32,7 @@ import _ from 'lodash';
  *
  * @type {String}
  */
-let _RE_NUMBER = '(\\-?(?:\\d+(?:\\.\\d+)?|Infinity))';
+const _RE_NUMBER = '(\\-?(?:\\d+(?:\\.\\d+)?|Infinity))';
 
 /**
  * Regexp for the interval notation
@@ -25,13 +44,13 @@ let _RE_NUMBER = '(\\-?(?:\\d+(?:\\.\\d+)?|Infinity))';
  *
  * @type {RegExp}
  */
-let RANGE_RE = new RegExp('^\\s*([\\[|\\(])\\s*' + _RE_NUMBER + '\\s*,\\s*' + _RE_NUMBER + '\\s*([\\]|\\)])\\s*$');
+const RANGE_RE = new RegExp('^\\s*([\\[|\\(])\\s*' + _RE_NUMBER + '\\s*,\\s*' + _RE_NUMBER + '\\s*([\\]|\\)])\\s*$');
 
-function parse(input) {
+export function parseRange(input) {
 
-  let match = String(input).match(RANGE_RE);
+  const match = String(input).match(RANGE_RE);
   if (!match) {
-    throw new TypeError('expected input to be in interval notation eg. (100, 200]');
+    throw new TypeError('expected input to be in interval notation e.g., (100, 200]');
   }
 
   return new Range(
@@ -43,7 +62,7 @@ function parse(input) {
 }
 
 function Range(/* minIncl, min, max, maxIncl */) {
-  let args = _.toArray(arguments);
+  const args = _.toArray(arguments);
   if (args[1] > args[2]) args.reverse();
 
   this.minInclusive = args[0];
@@ -62,5 +81,4 @@ Range.prototype.within = function (n) {
   return true;
 };
 
-export default parse;
 

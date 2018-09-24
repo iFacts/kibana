@@ -1,28 +1,94 @@
-import _ from 'lodash';
+/*
+ * Licensed to Elasticsearch B.V. under one or more contributor
+ * license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright
+ * ownership. Elasticsearch B.V. licenses this file to you under
+ * the Apache License, Version 2.0 (the "License"); you may
+ * not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 import $ from 'jquery';
+import moment from 'moment';
 import ngMock from 'ng_mock';
 import expect from 'expect.js';
 import fixtures from 'fixtures/fake_hierarchical_data';
-import sinon from 'auto-release-sinon';
-import AggResponseTabifyTabifyProvider from 'ui/agg_response/tabify/tabify';
+import sinon from 'sinon';
+import { LegacyResponseHandlerProvider } from '../../vis/response_handlers/legacy';
 import FixturesStubbedLogstashIndexPatternProvider from 'fixtures/stubbed_logstash_index_pattern';
-import VisProvider from 'ui/vis';
+import { VisProvider } from '../../vis';
+import { tabifyAggResponse } from '../../agg_response/tabify';
+
 describe('AggTable Directive', function () {
 
   let $rootScope;
   let $compile;
-  let tabifyAggResponse;
   let Vis;
   let indexPattern;
+  let settings;
+  let tableAggResponse;
+  const tabifiedData = {};
+
+  const init = () => {
+    const vis1 = new Vis(indexPattern, 'table');
+    tabifiedData.metricOnly = tabifyAggResponse(vis1.aggs, fixtures.metricOnly);
+
+    const vis2 = new Vis(indexPattern, {
+      type: 'table',
+      params: {
+        showMetricsAtAllLevels: true
+      },
+      aggs: [
+        { type: 'avg', schema: 'metric', params: { field: 'bytes' } },
+        { type: 'terms', schema: 'bucket', params: { field: 'extension' } },
+        { type: 'terms', schema: 'bucket', params: { field: 'geo.src' } },
+        { type: 'terms', schema: 'bucket', params: { field: 'machine.os' } }
+      ]
+    });
+    vis2.aggs.forEach(function (agg, i) {
+      agg.id = 'agg_' + (i + 1);
+    });
+    tabifiedData.threeTermBuckets = tabifyAggResponse(vis2.aggs, fixtures.threeTermBuckets, { metricsAtAllLevels: true });
+
+    const vis3 = new Vis(indexPattern, {
+      type: 'table',
+      aggs: [
+        { type: 'avg', schema: 'metric', params: { field: 'bytes' } },
+        { type: 'min', schema: 'metric', params: { field: '@timestamp' } },
+        { type: 'terms', schema: 'bucket', params: { field: 'extension' } },
+        { type: 'date_histogram', schema: 'bucket', params: { field: '@timestamp', interval: 'd' } },
+        { type: 'derivative', schema: 'metric', params: { metricAgg: 'custom', customMetric: { id: '5-orderAgg', type: 'count' } } },
+        { type: 'top_hits', schema: 'metric', params: { field: 'bytes', aggregate: { val: 'min' }, size: 1 } }
+      ]
+    });
+    vis3.aggs.forEach(function (agg, i) {
+      agg.id = 'agg_' + (i + 1);
+    });
+
+    tabifiedData.oneTermOneHistogramBucketWithTwoMetricsOneTopHitOneDerivative =
+      tabifyAggResponse(vis3.aggs, fixtures.oneTermOneHistogramBucketWithTwoMetricsOneTopHitOneDerivative);
+  };
 
   beforeEach(ngMock.module('kibana'));
-  beforeEach(ngMock.inject(function ($injector, Private) {
-    tabifyAggResponse = Private(AggResponseTabifyTabifyProvider);
+  beforeEach(ngMock.inject(function ($injector, Private, config) {
+    tableAggResponse = Private(LegacyResponseHandlerProvider).handler;
     indexPattern = Private(FixturesStubbedLogstashIndexPatternProvider);
     Vis = Private(VisProvider);
+    settings = config;
 
     $rootScope = $injector.get('$rootScope');
     $compile = $injector.get('$compile');
+
+    init();
   }));
 
   let $scope;
@@ -34,62 +100,50 @@ describe('AggTable Directive', function () {
   });
 
 
-  it('renders a simple response properly', function () {
-    let vis = new Vis(indexPattern, 'table');
-    $scope.table = tabifyAggResponse(vis, fixtures.metricOnly, { canSplit: false });
+  it('renders a simple response properly', async function () {
+    $scope.table = (await tableAggResponse(tabifiedData.metricOnly)).tables[0];
 
-    let $el = $compile('<kbn-agg-table table="table"></kbn-agg-table>')($scope);
+    const $el = $compile('<kbn-agg-table table="table"></kbn-agg-table>')($scope);
     $scope.$digest();
 
-    expect($el.find('tbody').size()).to.be(1);
-    expect($el.find('td').size()).to.be(1);
-    expect($el.find('td').text()).to.eql(1000);
+    expect($el.find('tbody').length).to.be(1);
+    expect($el.find('td').length).to.be(1);
+    expect($el.find('td').text()).to.eql('1,000');
   });
 
   it('renders nothing if the table is empty', function () {
     $scope.table = null;
-    let $el = $compile('<kbn-agg-table table="table"></kbn-agg-table>')($scope);
+    const $el = $compile('<kbn-agg-table table="table"></kbn-agg-table>')($scope);
     $scope.$digest();
 
-    expect($el.find('tbody').size()).to.be(0);
+    expect($el.find('tbody').length).to.be(0);
   });
 
-  it('renders a complex response properly', function () {
-    let vis = new Vis(indexPattern, {
-      type: 'pie',
-      aggs: [
-        { type: 'avg', schema: 'metric', params: { field: 'bytes' } },
-        { type: 'terms', schema: 'split', params: { field: 'extension' } },
-        { type: 'terms', schema: 'segment', params: { field: 'geo.src' } },
-        { type: 'terms', schema: 'segment', params: { field: 'machine.os' } }
-      ]
-    });
-    vis.aggs.forEach(function (agg, i) {
-      agg.id = 'agg_' + (i + 1);
-    });
+  it('renders a complex response properly', async function () {
 
-    $scope.table = tabifyAggResponse(vis, fixtures.threeTermBuckets, { canSplit: false });
-    let $el = $('<kbn-agg-table table="table"></kbn-agg-table>');
+    $scope.table = (await tableAggResponse(tabifiedData.threeTermBuckets)).tables[0];
+    const $el = $('<kbn-agg-table table="table"></kbn-agg-table>');
     $compile($el)($scope);
     $scope.$digest();
 
-    expect($el.find('tbody').size()).to.be(1);
+    expect($el.find('tbody').length).to.be(1);
 
-    let $rows = $el.find('tbody tr');
-    expect($rows.size()).to.be.greaterThan(0);
+    const $rows = $el.find('tbody tr');
+    expect($rows.length).to.be.greaterThan(0);
 
     function validBytes(str) {
-      expect(str).to.match(/^\d+$/);
-      let bytesAsNum = _.parseInt(str);
-      expect(bytesAsNum === 0 || bytesAsNum > 1000).to.be.ok();
+      const num = str.replace(/,/g, '');
+      if (num !== '-') {
+        expect(num).to.match(/^\d+$/);
+      }
     }
 
-    $rows.each(function (i) {
+    $rows.each(function () {
       // 6 cells in every row
-      let $cells = $(this).find('td');
-      expect($cells.size()).to.be(6);
+      const $cells = $(this).find('td');
+      expect($cells.length).to.be(6);
 
-      let txts = $cells.map(function () {
+      const txts = $cells.map(function () {
         return $(this).text().trim();
       });
 
@@ -107,13 +161,90 @@ describe('AggTable Directive', function () {
     });
   });
 
-  describe('aggTable.toCsv()', function () {
-    it('escapes and formats the rows and columns properly', function () {
-      let $el = $compile('<kbn-agg-table table="table">')($scope);
+  describe('renders totals row', function () {
+    async function totalsRowTest(totalFunc, expected) {
+
+      function setDefaultTimezone() {
+        moment.tz.setDefault(settings.get('dateFormat:tz'));
+      }
+
+      const off = $scope.$on('change:config.dateFormat:tz', setDefaultTimezone);
+      const oldTimezoneSetting = settings.get('dateFormat:tz');
+      settings.set('dateFormat:tz', 'UTC');
+
+      $scope.table = (await tableAggResponse(tabifiedData.oneTermOneHistogramBucketWithTwoMetricsOneTopHitOneDerivative)).tables[0];
+      $scope.showTotal = true;
+      $scope.totalFunc = totalFunc;
+      const $el = $('<kbn-agg-table table="table" show-total="showTotal" total-func="totalFunc"></kbn-agg-table>');
+      $compile($el)($scope);
       $scope.$digest();
 
-      let $tableScope = $el.isolateScope();
-      let aggTable = $tableScope.aggTable;
+      expect($el.find('tfoot').length).to.be(1);
+
+      const $rows = $el.find('tfoot tr');
+      expect($rows.length).to.be(1);
+
+      const $cells = $($rows[0]).find('th');
+      expect($cells.length).to.be(6);
+
+      for (let i = 0; i < 6; i++) {
+        expect($($cells[i]).text()).to.be(expected[i]);
+      }
+      settings.set('dateFormat:tz', oldTimezoneSetting);
+      off();
+    }
+    it('as count', async function () {
+      await totalsRowTest('count', ['18', '18', '18', '18', '18', '18']);
+    });
+    it('as min', async function () {
+      await totalsRowTest('min', [
+        '',
+        '2014-09-28',
+        '9,283',
+        'September 28th 2014, 00:00:00.000',
+        '1',
+        '11'
+      ]);
+    });
+    it('as max', async function () {
+      await totalsRowTest('max', [
+        '',
+        '2014-10-03',
+        '220,943',
+        'October 3rd 2014, 00:00:00.000',
+        '239',
+        '837'
+      ]);
+    });
+    it('as avg', async function () {
+      await totalsRowTest('avg', [
+        '',
+        '',
+        '87,221.5',
+        '',
+        '64.667',
+        '206.833'
+      ]);
+    });
+    it('as sum', async function () {
+      await totalsRowTest('sum', [
+        '',
+        '',
+        '1,569,987',
+        '',
+        '1,164',
+        '3,723'
+      ]);
+    });
+  });
+
+  describe('aggTable.toCsv()', function () {
+    it('escapes and formats the rows and columns properly', function () {
+      const $el = $compile('<kbn-agg-table table="table">')($scope);
+      $scope.$digest();
+
+      const $tableScope = $el.isolateScope();
+      const aggTable = $tableScope.aggTable;
 
       $tableScope.table = {
         columns: [
@@ -150,13 +281,13 @@ describe('AggTable Directive', function () {
     });
 
     it('calls _saveAs properly', function () {
-      let $el = $compile('<kbn-agg-table table="table">')($scope);
+      const $el = $compile('<kbn-agg-table table="table">')($scope);
       $scope.$digest();
 
-      let $tableScope = $el.isolateScope();
-      let aggTable = $tableScope.aggTable;
+      const $tableScope = $el.isolateScope();
+      const aggTable = $tableScope.aggTable;
 
-      let saveAs = sinon.stub(aggTable, '_saveAs');
+      const saveAs = sinon.stub(aggTable, '_saveAs');
       $tableScope.table = {
         columns: [
           { title: 'one' },
@@ -172,25 +303,25 @@ describe('AggTable Directive', function () {
       aggTable.exportAsCsv();
 
       expect(saveAs.callCount).to.be(1);
-      let call = saveAs.getCall(0);
+      const call = saveAs.getCall(0);
       expect(call.args[0]).to.be.a(FakeBlob);
       expect(call.args[0].slices).to.eql([
         'one,two,"with double-quotes("")"' + '\r\n' +
         '1,2,"""foobar"""' + '\r\n'
       ]);
       expect(call.args[0].opts).to.eql({
-        type: 'text/plain'
+        type: 'text/plain;charset=utf-8'
       });
       expect(call.args[1]).to.be('somefilename.csv');
     });
 
     it('should use the export-title attribute', function () {
-      let expected = 'export file name';
-      let $el = $compile(`<kbn-agg-table table="table" export-title="exportTitle">`)($scope);
+      const expected = 'export file name';
+      const $el = $compile(`<kbn-agg-table table="table" export-title="exportTitle">`)($scope);
       $scope.$digest();
 
-      let $tableScope = $el.isolateScope();
-      let aggTable = $tableScope.aggTable;
+      const $tableScope = $el.isolateScope();
+      const aggTable = $tableScope.aggTable;
       $tableScope.table = {
         columns: [],
         rows: []

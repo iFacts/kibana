@@ -1,10 +1,27 @@
-import VislibVisualizationsColumnChartProvider from 'ui/vislib/visualizations/column_chart';
-import VislibVisualizationsPieChartProvider from 'ui/vislib/visualizations/pie_chart';
-import VislibVisualizationsLineChartProvider from 'ui/vislib/visualizations/line_chart';
-import VislibVisualizationsAreaChartProvider from 'ui/vislib/visualizations/area_chart';
-import VislibVisualizationsTileMapProvider from 'ui/vislib/visualizations/tile_map';
+/*
+ * Licensed to Elasticsearch B.V. under one or more contributor
+ * license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright
+ * ownership. Elasticsearch B.V. licenses this file to you under
+ * the Apache License, Version 2.0 (the "License"); you may
+ * not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
 
-export default function VisTypeFactory(Private) {
+import { VislibVisualizationsPointSeriesProvider } from './point_series';
+import { VislibVisualizationsPieChartProvider } from './pie_chart';
+import { GaugeChartProvider } from './gauge_chart';
+
+export function VislibVisualizationsVisTypesProvider(Private) {
 
   /**
    * Provides the visualizations for the vislib
@@ -15,10 +32,10 @@ export default function VisTypeFactory(Private) {
    * @return {Function} Returns an Object of Visualization classes
    */
   return {
-    histogram: Private(VislibVisualizationsColumnChartProvider),
     pie: Private(VislibVisualizationsPieChartProvider),
-    line: Private(VislibVisualizationsLineChartProvider),
-    area: Private(VislibVisualizationsAreaChartProvider),
-    tile_map: Private(VislibVisualizationsTileMapProvider)
+    point_series: Private(VislibVisualizationsPointSeriesProvider),
+    gauge: Private(GaugeChartProvider),
+    goal: Private(GaugeChartProvider),
+    metric: Private(GaugeChartProvider)
   };
-};
+}

@@ -1,8 +1,26 @@
-import sinon from 'auto-release-sinon';
+/*
+ * Licensed to Elasticsearch B.V. under one or more contributor
+ * license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright
+ * ownership. Elasticsearch B.V. licenses this file to you under
+ * the Apache License, Version 2.0 (the "License"); you may
+ * not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
+import sinon from 'sinon';
 import expect from 'expect.js';
 import ngMock from 'ng_mock';
-import 'ui/state_management/app_state';
-import StateManagementAppStateProvider from 'ui/state_management/app_state';
+import { AppStateProvider } from '../app_state';
 
 describe('State Management', function () {
   let $rootScope;
@@ -11,7 +29,7 @@ describe('State Management', function () {
   beforeEach(ngMock.module('kibana'));
   beforeEach(ngMock.inject(function (_$rootScope_, _$location_, Private) {
     $rootScope = _$rootScope_;
-    AppState = Private(StateManagementAppStateProvider);
+    AppState = Private(AppStateProvider);
   }));
 
   describe('App State', function () {
@@ -27,7 +45,7 @@ describe('State Management', function () {
     });
 
     it('should use passed in params', function () {
-      let params = {
+      const params = {
         test: true,
         mock: false
       };
@@ -46,8 +64,7 @@ describe('State Management', function () {
     });
 
     it('should be destroyed on $routeChangeStart', function () {
-      let destroySpy = sinon.spy(appState, 'destroy');
-      let url = '/test/path';
+      const destroySpy = sinon.spy(appState, 'destroy');
 
       $rootScope.$emit('$routeChangeStart');
 

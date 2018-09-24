@@ -1,38 +1,57 @@
-import $ from 'jquery';
-import uiModules from 'ui/modules';
-let module = uiModules.get('kibana');
+/*
+ * Licensed to Elasticsearch B.V. under one or more contributor
+ * license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright
+ * ownership. Elasticsearch B.V. licenses this file to you under
+ * the Apache License, Version 2.0 (the "License"); you may
+ * not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
 
-module.directive('kbnTruncated', function ($compile) {
+import truncText from 'trunc-text';
+import truncHTML from 'trunc-html';
+import { uiModules } from '../modules';
+import truncatedTemplate from './partials/truncated.html';
+import 'angular-sanitize';
+
+const module = uiModules.get('kibana', ['ngSanitize']);
+
+module.directive('kbnTruncated', function () {
   return {
     restrict: 'E',
     scope: {
-      orig: '@',
-      length: '@'
+      source: '@',
+      length: '@',
+      isHtml: '@'
     },
-    template: function ($element, attrs) {
-      let template = '<span>{{text}}</span>';
-      template += '<span ng-if="orig.length > length"> <a ng-click="toggle()">{{action}}</a></span>';
-      return template;
-    },
-    link: function ($scope, $element, attrs) {
+    template: truncatedTemplate,
+    link: function ($scope) {
+      const source = $scope.source;
+      const max = $scope.length;
+      const truncated = $scope.isHtml
+        ? truncHTML(source, max).html
+        : truncText(source, max);
 
-      let fullText = $scope.orig;
-      let truncated = fullText.substring(0, $scope.length);
+      $scope.content = truncated;
 
-      if (fullText === truncated) {
-        $scope.text = fullText;
+      if (source === truncated) {
         return;
       }
-
-      truncated += '...';
-
+      $scope.truncated = true;
       $scope.expanded = false;
-      $scope.text = truncated;
       $scope.action = 'more';
-
-      $scope.toggle = function () {
+      $scope.toggle = () => {
         $scope.expanded = !$scope.expanded;
-        $scope.text = $scope.expanded ? fullText : truncated;
+        $scope.content = $scope.expanded ? source : truncated;
         $scope.action = $scope.expanded ? 'less' : 'more';
       };
     }

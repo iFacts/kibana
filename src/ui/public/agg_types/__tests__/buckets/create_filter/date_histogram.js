@@ -1,41 +1,53 @@
+/*
+ * Licensed to Elasticsearch B.V. under one or more contributor
+ * license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright
+ * ownership. Elasticsearch B.V. licenses this file to you under
+ * the Apache License, Version 2.0 (the "License"); you may
+ * not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 import _ from 'lodash';
 import moment from 'moment';
-import sinon from 'auto-release-sinon';
 import aggResp from 'fixtures/agg_resp/date_histogram';
 import ngMock from 'ng_mock';
 import expect from 'expect.js';
-import VisProvider from 'ui/vis';
+import { VisProvider } from '../../../../vis';
 import FixturesStubbedLogstashIndexPatternProvider from 'fixtures/stubbed_logstash_index_pattern';
-import AggTypesBucketsCreateFilterDateHistogramProvider from 'ui/agg_types/buckets/create_filter/date_histogram';
-import TimeBucketsProvider from 'ui/time_buckets';
-import AggTypesBucketsIntervalOptionsProvider from 'ui/agg_types/buckets/_interval_options';
+import { createFilterDateHistogram } from '../../../buckets/create_filter/date_histogram';
+import { intervalOptions } from '../../../buckets/_interval_options';
+
 describe('AggConfig Filters', function () {
   describe('date_histogram', function () {
-
     let vis;
     let agg;
     let field;
     let filter;
     let bucketKey;
     let bucketStart;
-    let getIntervalStub;
-    let intervalOptions;
 
     let init;
 
     beforeEach(ngMock.module('kibana'));
-    beforeEach(ngMock.inject(function (Private, $injector) {
-      let Vis = Private(VisProvider);
-      let indexPattern = Private(FixturesStubbedLogstashIndexPatternProvider);
-      let createFilter = Private(AggTypesBucketsCreateFilterDateHistogramProvider);
-      let TimeBuckets = Private(TimeBucketsProvider);
-      intervalOptions = Private(AggTypesBucketsIntervalOptionsProvider);
+    beforeEach(ngMock.inject(function (Private) {
+      const Vis = Private(VisProvider);
+      const indexPattern = Private(FixturesStubbedLogstashIndexPatternProvider);
 
       init = function (interval, duration) {
         interval = interval || 'auto';
         if (interval === 'custom') interval = agg.params.customInterval;
         duration = duration || moment.duration(15, 'minutes');
-        field = _.sample(indexPattern.fields.byType.date);
+        field = _.sample(_.reject(indexPattern.fields.byType.date, 'scripted'));
         vis = new Vis(indexPattern, {
           type: 'histogram',
           aggs: [
@@ -51,14 +63,14 @@ describe('AggConfig Filters', function () {
         bucketKey = _.sample(aggResp.aggregations['1'].buckets).key;
         bucketStart = moment(bucketKey);
 
-        let timePad = moment.duration(duration / 2);
+        const timePad = moment.duration(duration / 2);
         agg.buckets.setBounds({
           min: bucketStart.clone().subtract(timePad),
           max: bucketStart.clone().add(timePad),
         });
         agg.buckets.setInterval(interval);
 
-        filter = createFilter(agg, bucketKey);
+        filter = createFilterDateHistogram(agg, bucketKey);
       };
     }));
 
@@ -68,7 +80,7 @@ describe('AggConfig Filters', function () {
       expect(filter).to.have.property('range');
       expect(filter.range).to.have.property(field.name);
 
-      let fieldParams = filter.range[field.name];
+      const fieldParams = filter.range[field.name];
       expect(fieldParams).to.have.property('gte');
       expect(fieldParams.gte).to.be.a('number');
 
@@ -98,8 +110,8 @@ describe('AggConfig Filters', function () {
 
         init(option.val, duration);
 
-        let interval = agg.buckets.getInterval();
-        let params = filter.range[field.name];
+        const interval = agg.buckets.getInterval();
+        const params = filter.range[field.name];
 
         expect(params.gte).to.be(+bucketStart);
         expect(params.lt).to.be(+bucketStart.clone().add(interval));

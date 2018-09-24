@@ -1,100 +1,95 @@
-import d3 from 'd3';
+/*
+ * Licensed to Elasticsearch B.V. under one or more contributor
+ * license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright
+ * ownership. Elasticsearch B.V. licenses this file to you under
+ * the Apache License, Version 2.0 (the "License"); you may
+ * not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 import $ from 'jquery';
 import _ from 'lodash';
-import Binder from 'ui/binder';
-export default function AlertsFactory(Private) {
+
+export function VislibLibAlertsProvider() {
 
   /**
-   * Adds allerts that float in front of a visualization
+   * Adds alerts that float in front of a visualization
    *
    * @class Alerts
    * @constructor
    * @param el {HTMLElement} Reference to DOM element
    */
-  function Alerts(vis, data, alertDefs) {
-    if (!(this instanceof Alerts)) {
-      return new Alerts(vis, data, alertDefs);
+  class Alerts {
+    constructor(vis, alertDefs) {
+      this.vis = vis;
+      this.data = vis.data;
+      this.alertDefs = _.cloneDeep(alertDefs);
+
+      this.alerts = _(alertDefs)
+        .map(alertDef => {
+          if (!alertDef) return;
+          if (alertDef.test && !alertDef.test(vis, this.data)) return;
+          return this._addAlert(alertDef);
+        })
+        .compact();
     }
 
-    this.vis = vis;
-    this.data = data;
-    this.binder = new Binder();
-    this.alertDefs = alertDefs || [];
+    _addAlert(alertDef) {
+      const type = alertDef.type || 'info';
+      const icon = alertDef.icon || type;
+      const msg = alertDef.msg;
+      // alert container
+      const $icon = $('<i>').addClass('vis-alerts-icon fa fa-' + icon);
+      const $text = $('<p>').addClass('vis-alerts-text').text(msg);
+      const $closeIcon =  $('<i>').addClass('fa fa-close');
+      const $closeDiv = $('<div>').addClass('vis-alerts-close').append($closeIcon);
 
-    this.binder.jqOn(vis.el, 'mouseenter', '.vis-alerts-tray', function () {
-      let $tray = $(this);
-      hide();
-      $(vis.el).on('mousemove', checkForExit);
+      const $alert = $('<div>').addClass('vis-alert vis-alert-' + type).append([$icon, $text, $closeDiv]);
+      $closeDiv.on('click', () => {
+        $alert.remove();
+      });
 
-      function hide() {
-        $tray.css({
-          'pointer-events': 'none',
-          opacity: 0.3
-        });
-      }
+      return $alert;
+    }
 
-      function show() {
-        $(vis.el).off('mousemove', checkForExit);
-        $tray.css({
-          'pointer-events': 'auto',
-          opacity: 1
-        });
-      }
+    // renders initial alerts
+    render() {
+      const alerts = this.alerts;
+      const vis = this.vis;
 
-      function checkForExit(event) {
-        let pos = $tray.offset();
-        if (pos.top > event.clientY || pos.left > event.clientX) return show();
+      $(vis.el).find('.vis-alerts').append($('<div>').addClass('vis-alerts-tray'));
+      if (!alerts.size()) return;
+      $(vis.el).find('.vis-alerts-tray').append(alerts.value());
+    }
 
-        let bottom = pos.top + $tray.height();
-        if (event.clientY > bottom) return show();
+    // shows new alert
+    show(msg, type) {
+      const vis = this.vis;
+      const alert = {
+        msg: msg,
+        type: type
+      };
+      if (this.alertDefs.find(alertDef => alertDef.msg === alert.msg)) return;
+      this.alertDefs.push(alert);
+      $(vis.el).find('.vis-alerts-tray').append(
+        this._addAlert(alert)
+      );
+    }
 
-        let right = pos.left + $tray.width();
-        if (event.clientX > right) return show();
-      }
-    });
+    destroy() {
+      $(this.vis.el).find('.vis-alerts').remove();
+    }
   }
 
-  /**
-   * Renders chart titles
-   *
-   * @method render
-   * @returns {D3.Selection|D3.Transition.Transition} DOM element with chart titles
-   */
-  Alerts.prototype.render = function () {
-    let vis = this.vis;
-    let data = this.data;
-
-    let alerts = _(this.alertDefs)
-    .map(function (alertDef) {
-      if (!alertDef) return;
-      if (alertDef.test && !alertDef.test(vis, data)) return;
-
-      let type = alertDef.type || 'info';
-      let icon = alertDef.icon || type;
-      let msg = alertDef.msg;
-
-      // alert container
-      let $icon = $('<i>').addClass('vis-alerts-icon fa fa-' + icon);
-      let $text = $('<p>').addClass('vis-alerts-text').text(msg);
-
-      return $('<div>').addClass('vis-alert vis-alert-' + type).append([$icon, $text]);
-    })
-    .compact();
-
-    if (!alerts.size()) return;
-
-    $(vis.el).find('.vis-alerts').append(
-      $('<div>').addClass('vis-alerts-tray').append(alerts.value())
-    );
-  };
-
-  /**
-   * Tear down the Alerts
-   * @return {undefined}
-   */
-  Alerts.prototype.destroy = function () {
-    this.binder.destroy();
-  };
-
   return Alerts;
-};
+}

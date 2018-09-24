@@ -1,21 +1,25 @@
-/* eslint-disable */
 /*
+ * geohash.js
+ * Geohash library for JavaScript
+ * (c) 2008 David Troy
+ * Distributed under the MIT License
+ */
+
+/*
+ * @notice
+ * This product bundles geohash.js which is available under a
+ * "MIT" license.  For details, see src/ui/public/utils/decode_geo_hash.js.
+ */
+
+/**
  * Decodes geohash to object containing
  * top-left and bottom-right corners of
  * rectangle and center point.
  *
- * geohash.js
- * Geohash library for Javascript
- * (c) 2008 David Troy
- * Distributed under the MIT License
- *
- * @method refine_interval
- * @param interval {Array} [long, lat]
- * @param cd {Number}
- * @param mask {Number}
- * @return {Object} interval
+ * @param  {string} geohash
+ * @return {{latitude,longitude}}
  */
-function decodeGeoHash(geohash) {
+export function decodeGeoHash(geohash) {
   let BITS = [16, 8, 4, 2, 1];
   let BASE32 = '0123456789bcdefghjkmnpqrstuvwxyz';
   let is_even = 1;
@@ -55,4 +59,27 @@ function refine_interval(interval, cd, mask) {
   }
 }
 
-export default decodeGeoHash;
+/**
+ * Get the number of geohash cells for a given precision
+ *
+ * @param {number} precision the geohash precision (1<=precision<=12).
+ * @param {number} axis constant for the axis 0=lengthwise (ie. columns, along longitude), 1=heightwise (ie. rows, along latitude).
+ * @returns {number} Number of geohash cells (rows or columns) at that precision
+ */
+function geohashCells(precision, axis) {
+  let cells = 1;
+  for (let i = 1; i <= precision; i += 1) {
+    //On odd precisions, rows divide by 4 and columns by 8. Vice-versa on even precisions.
+    cells *= (i % 2 === axis) ? 4 : 8;
+  }
+  return cells;
+}
+
+/**
+ * Get the number of geohash columns (world-wide) for a given precision
+ * @param precision the geohash precision
+ * @returns {number} the number of columns
+ */
+export function geohashColumns(precision) {
+  return geohashCells(precision, 0);
+}

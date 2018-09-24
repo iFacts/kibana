@@ -1,38 +1,49 @@
+/*
+ * Licensed to Elasticsearch B.V. under one or more contributor
+ * license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright
+ * ownership. Elasticsearch B.V. licenses this file to you under
+ * the Apache License, Version 2.0 (the "License"); you may
+ * not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 import angular from 'angular';
-import sinon from 'auto-release-sinon';
 import expect from 'expect.js';
 import ngMock from 'ng_mock';
 
 // Load the kibana app dependencies.
 
 let $rootScope;
-let $timeout;
 let $compile;
-let Promise;
 let Private;
 let config;
 let $elemScope;
 let $elem;
 
 let cycleIndex = 0;
-let markup = '<input ng-model="mockModel" parse-query input-focus type="text">';
+const markup = '<input ng-model="mockModel" parse-query input-focus type="text">';
 let fromUser;
-import toUser from 'ui/parse_query/lib/to_user';
-import 'ui/parse_query';
-import ParseQueryLibFromUserProvider from 'ui/parse_query/lib/from_user';
+import { toUser } from '../../parse_query/lib/to_user';
+import '../../parse_query';
+import { ParseQueryLibFromUserProvider } from '../../parse_query/lib/from_user';
 
-let init = function () {
+const init = function () {
   // Load the application
   ngMock.module('kibana');
 
-  ngMock.module('kibana', function ($provide) {
-  });
-
   // Create the scope
-  ngMock.inject(function ($injector, _$rootScope_, _$compile_, _$timeout_, _Promise_, _Private_, _config_) {
-    $timeout = _$timeout_;
+  ngMock.inject(function ($injector, _$rootScope_, _$compile_, _$timeout_, _Private_, _config_) {
     $compile = _$compile_;
-    Promise = _Promise_;
     Private = _Private_;
     config = _config_;
 
@@ -41,7 +52,7 @@ let init = function () {
   });
 };
 
-let compile = function () {
+const compile = function () {
   $rootScope.mockModel = 'cycle' + cycleIndex++;
   $rootScope.mockQueryInput = undefined;
 
@@ -71,32 +82,24 @@ describe('parse-query directive', function () {
     });
 
     it('should return the input if passed an object', function () {
-      expect(fromUser({foo: 'bar'})).to.eql({foo: 'bar'});
+      expect(fromUser({ foo: 'bar' })).to.eql({ foo: 'bar' });
     });
 
-    it('unless the object is empty, that implies a *', function () {
-      expect(fromUser({})).to.eql({query_string: {query: '*'}});
+    it('unless the object is empty, then convert it to an empty string', function () {
+      expect(fromUser({})).to.eql('');
     });
 
-    it('should treat an empty string as a *', function () {
-      expect(fromUser('')).to.eql({query_string: {query: '*'}});
+    it('should pass through input strings that not start with {', function () {
+      expect(fromUser('foo')).to.eql('foo');
+      expect(fromUser('400')).to.eql('400');
+      expect(fromUser('true')).to.eql('true');
     });
 
-    it('should merge in the query string options', function () {
-      config.set('query:queryString:options', {analyze_wildcard: true});
-      expect(fromUser('foo')).to.eql({query_string: {query: 'foo', analyze_wildcard: true}});
-      expect(fromUser('')).to.eql({query_string: {query: '*', analyze_wildcard: true}});
-    });
-
-    it('should treat input that does not start with { as a query string', function () {
-      expect(fromUser('foo')).to.eql({query_string: {query: 'foo'}});
-      expect(fromUser('400')).to.eql({query_string: {query: '400'}});
-      expect(fromUser('true')).to.eql({query_string: {query: 'true'}});
-    });
-
-    it('should parse valid JSON', function () {
+    it('should parse valid JSON and return the object instead of a string', function () {
       expect(fromUser('{}')).to.eql({});
-      expect(fromUser('{a:b}')).to.eql({query_string: {query: '{a:b}'}});
+
+      // invalid json remains a string
+      expect(fromUser('{a:b}')).to.eql('{a:b}');
     });
   });
 
@@ -111,7 +114,7 @@ describe('parse-query directive', function () {
     });
 
     it('should present objects as strings', function () {
-      expect(toUser({foo: 'bar'})).to.be('{"foo":"bar"}');
+      expect(toUser({ foo: 'bar' })).to.be('{"foo":"bar"}');
     });
 
     it('should present query_string queries as strings', function () {

@@ -1,9 +1,28 @@
+/*
+ * Licensed to Elasticsearch B.V. under one or more contributor
+ * license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright
+ * ownership. Elasticsearch B.V. licenses this file to you under
+ * the Apache License, Version 2.0 (the "License"); you may
+ * not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 import _ from 'lodash';
 import expect from 'expect.js';
 import ngMock from 'ng_mock';
-import WorkQueue from 'ui/routes/work_queue';
-import sinon from 'auto-release-sinon';
-import 'ui/promises';
+import { WorkQueue } from '../work_queue';
+import sinon from 'sinon';
+import '../../promises';
 
 describe('work queue', function () {
   let queue;
@@ -25,10 +44,10 @@ describe('work queue', function () {
 
   describe('#resolveWhenFull', function () {
     it('resolves requests waiting for the queue to fill when appropriate', function () {
-      let size = _.random(5, 50);
+      const size = _.random(5, 50);
       queue.limit = size;
 
-      let whenFull = Promise.defer();
+      const whenFull = Promise.defer();
       sinon.stub(whenFull, 'resolve');
       queue.resolveWhenFull(whenFull);
 
@@ -53,11 +72,11 @@ describe('work queue', function () {
    *                         can manipulate the filled queue
    */
   function fillWithStubs(then) {
-    let size = _.random(5, 50);
-    let stub = sinon.stub();
+    const size = _.random(5, 50);
+    const stub = sinon.stub();
 
     _.times(size, function () {
-      let d = Promise.defer();
+      const d = Promise.defer();
       // overwrite the defer methods with the stub
       d.resolve = stub;
       d.reject = stub;

@@ -1,16 +1,33 @@
-import _ from 'lodash';
-import angular from 'angular';
-import qs from 'ui/utils/query_string';
-import rison from 'rison-node';
-import StateManagementStateProvider from 'ui/state_management/state';
-import uiModules from 'ui/modules';
+/*
+ * Licensed to Elasticsearch B.V. under one or more contributor
+ * license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright
+ * ownership. Elasticsearch B.V. licenses this file to you under
+ * the Apache License, Version 2.0 (the "License"); you may
+ * not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
 
-let module = uiModules.get('kibana/global_state');
+import { QueryString } from '../utils/query_string';
+import { StateProvider } from './state';
+import { uiModules } from '../modules';
+import { createLegacyClass } from '../utils/legacy_class';
 
-module.service('globalState', function (Private, $rootScope, $location) {
-  let State = Private(StateManagementStateProvider);
+const module = uiModules.get('kibana/global_state');
 
-  _.class(GlobalState).inherits(State);
+export function GlobalStateProvider(Private) {
+  const State = Private(StateProvider);
+
+  createLegacyClass(GlobalState).inherits(State);
   function GlobalState(defaults) {
     GlobalState.Super.call(this, '_g', defaults);
   }
@@ -19,8 +36,12 @@ module.service('globalState', function (Private, $rootScope, $location) {
   GlobalState.prototype._persistAcrossApps = true;
 
   GlobalState.prototype.removeFromUrl = function (url) {
-    return qs.replaceParamInUrl(url, this._urlParam, null);
+    return QueryString.replaceParamInUrl(url, this._urlParam, null);
   };
 
   return new GlobalState();
+}
+
+module.service('globalState', function (Private) {
+  return Private(GlobalStateProvider);
 });

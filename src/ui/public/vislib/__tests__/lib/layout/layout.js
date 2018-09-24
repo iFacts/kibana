@@ -1,5 +1,23 @@
+/*
+ * Licensed to Elasticsearch B.V. under one or more contributor
+ * license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright
+ * ownership. Elasticsearch B.V. licenses this file to you under
+ * the Apache License, Version 2.0 (the "License"); you may
+ * not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 import d3 from 'd3';
-import angular from 'angular';
 import ngMock from 'ng_mock';
 import expect from 'expect.js';
 
@@ -9,16 +27,18 @@ import columns from 'fixtures/vislib/mock_data/date_histogram/_columns';
 import rows from 'fixtures/vislib/mock_data/date_histogram/_rows';
 import stackedSeries from 'fixtures/vislib/mock_data/date_histogram/_stacked_series';
 import $ from 'jquery';
-import VislibLibLayoutLayoutProvider from 'ui/vislib/lib/layout/layout';
+import { VislibLibLayoutLayoutProvider } from '../../../lib/layout/layout';
 import FixturesVislibVisFixtureProvider from 'fixtures/vislib/_vis_fixture';
-import PersistedStatePersistedStateProvider from 'ui/persisted_state/persisted_state';
-let dateHistogramArray = [
+import '../../../../persisted_state';
+import { VislibVisConfigProvider } from '../../../lib/vis_config';
+
+const dateHistogramArray = [
   series,
   columns,
   rows,
   stackedSeries
 ];
-let names = [
+const names = [
   'series',
   'columns',
   'rows',
@@ -32,43 +52,47 @@ dateHistogramArray.forEach(function (data, i) {
     let persistedState;
     let numberOfCharts;
     let testLayout;
+    let VisConfig;
 
     beforeEach(ngMock.module('kibana'));
 
     beforeEach(function () {
-      ngMock.inject(function (Private) {
+      ngMock.inject(function (Private, $injector) {
         Layout = Private(VislibLibLayoutLayoutProvider);
         vis = Private(FixturesVislibVisFixtureProvider)();
-        persistedState = new (Private(PersistedStatePersistedStateProvider))();
+        persistedState = new ($injector.get('PersistedState'))();
+        VisConfig = Private(VislibVisConfigProvider);
         vis.render(data, persistedState);
         numberOfCharts = vis.handler.charts.length;
       });
     });
 
     afterEach(function () {
-      $(vis.el).remove();
-      vis = null;
+      vis.destroy();
     });
 
     describe('createLayout Method', function () {
       it('should append all the divs', function () {
         expect($(vis.el).find('.vis-wrapper').length).to.be(1);
-        expect($(vis.el).find('.y-axis-col-wrapper').length).to.be(1);
+        expect($(vis.el).find('.y-axis-col-wrapper').length).to.be(2);
         expect($(vis.el).find('.vis-col-wrapper').length).to.be(1);
-        expect($(vis.el).find('.y-axis-col').length).to.be(1);
-        expect($(vis.el).find('.y-axis-title').length).to.be(1);
-        expect($(vis.el).find('.y-axis-div-wrapper').length).to.be(1);
-        expect($(vis.el).find('.y-axis-spacer-block').length).to.be(1);
+        expect($(vis.el).find('.y-axis-col').length).to.be(2);
+        expect($(vis.el).find('.y-axis-title').length).to.be.above(0);
+        expect($(vis.el).find('.y-axis-div-wrapper').length).to.be(2);
+        expect($(vis.el).find('.y-axis-spacer-block').length).to.be(4);
         expect($(vis.el).find('.chart-wrapper').length).to.be(numberOfCharts);
-        expect($(vis.el).find('.x-axis-wrapper').length).to.be(1);
-        expect($(vis.el).find('.x-axis-div-wrapper').length).to.be(1);
-        expect($(vis.el).find('.x-axis-title').length).to.be(1);
+        expect($(vis.el).find('.x-axis-wrapper').length).to.be(2);
+        expect($(vis.el).find('.x-axis-div-wrapper').length).to.be(2);
+        expect($(vis.el).find('.x-axis-title').length).to.be.above(0);
       });
     });
 
     describe('layout Method', function () {
       beforeEach(function () {
-        testLayout = new Layout(vis.el, vis.data, 'histogram');
+        const visConfig = new VisConfig({
+          type: 'histogram'
+        }, data, persistedState, vis.el);
+        testLayout = new Layout(visConfig);
       });
 
       it('should append a div with the correct class name', function () {

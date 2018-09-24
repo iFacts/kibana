@@ -1,88 +1,88 @@
+/*
+ * Licensed to Elasticsearch B.V. under one or more contributor
+ * license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright
+ * ownership. Elasticsearch B.V. licenses this file to you under
+ * the Apache License, Version 2.0 (the "License"); you may
+ * not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 import _ from 'lodash';
-import sinon from 'auto-release-sinon';
+import sinon from 'sinon';
 import expect from 'expect.js';
 import ngMock from 'ng_mock';
-import RealAggConfigPM from 'ui/vis/agg_config';
-import VisProvider from 'ui/vis';
-import VisAggConfigProvider from 'ui/vis/agg_config';
-import VisAggConfigsProvider from 'ui/vis/agg_configs';
+import { AggConfig } from '../agg_config';
+import { VisProvider } from '..';
+import { AggConfigs } from '../agg_configs';
 import FixturesStubbedLogstashIndexPatternProvider from 'fixtures/stubbed_logstash_index_pattern';
-import VisSchemasProvider from 'ui/vis/schemas';
+import { Schemas } from '../editors/default/schemas';
+import { IndexedArray } from '../../indexed_array';
+
 describe('AggConfigs', function () {
 
   let Vis;
-  let IndexedArray;
-  let AggConfig;
-  let AggConfigs;
-  let SpiedAggConfig;
   let indexPattern;
-  let Schemas;
 
   beforeEach(ngMock.module('kibana'));
   beforeEach(ngMock.inject(function (Private) {
-    // replace the AggConfig module with a spy
-    AggConfig = Private(RealAggConfigPM);
-    let spy = sinon.spy(AggConfig);
-    Object.defineProperty(spy, 'aggTypes', {
-      get: function () { return AggConfig.aggTypes; },
-      set: function (val) { AggConfig.aggTypes = val; }
-    });
-
-    Private.stub(RealAggConfigPM, spy);
-
     // load main deps
     Vis = Private(VisProvider);
-    SpiedAggConfig = Private(VisAggConfigProvider);
-    AggConfigs = Private(VisAggConfigsProvider);
-    IndexedArray = require('ui/indexed_array');
     indexPattern = Private(FixturesStubbedLogstashIndexPatternProvider);
-    Schemas = Private(VisSchemasProvider);
   }));
 
   it('extends IndexedArray', function () {
-    let ac = new AggConfigs();
+    const ac = new AggConfigs();
     expect(ac).to.be.a(IndexedArray);
   });
 
   describe('constructor', function () {
     it('handles passing just a vis', function () {
-      let vis = new Vis(indexPattern, {
+      const vis = new Vis(indexPattern, {
         type: 'histogram',
         aggs: []
       });
 
-      let ac = new AggConfigs(vis);
+      const ac = new AggConfigs(vis.indexPattern, [], vis.type.schemas.all);
       expect(ac).to.have.length(1);
     });
 
     it('converts configStates into AggConfig objects if they are not already', function () {
-      let vis = new Vis(indexPattern, {
+      const vis = new Vis(indexPattern, {
         type: 'histogram',
         aggs: []
       });
 
-      let ac = new AggConfigs(vis, [
+      const ac = new AggConfigs(vis.indexPattern, [
         {
           type: 'date_histogram',
           schema: 'segment'
         },
-        new AggConfig(vis, {
+        new AggConfig(vis.aggs, {
           type: 'terms',
           schema: 'split'
         })
-      ]);
+      ], vis.type.schemas.all);
 
       expect(ac).to.have.length(3);
-      expect(SpiedAggConfig).to.have.property('callCount', 3);
     });
 
-    it('attemps to ensure that all states have an id', function () {
-      let vis = new Vis(indexPattern, {
+    it('attempts to ensure that all states have an id', function () {
+      const vis = new Vis(indexPattern, {
         type: 'histogram',
         aggs: []
       });
 
-      let states = [
+      const states = [
         {
           type: 'date_histogram',
           schema: 'segment'
@@ -93,10 +93,11 @@ describe('AggConfigs', function () {
         }
       ];
 
-      let spy = sinon.spy(SpiedAggConfig, 'ensureIds');
-      let ac = new AggConfigs(vis, states);
+      const spy = sinon.spy(AggConfig, 'ensureIds');
+      new AggConfigs(vis.indexPattern, states, vis.type.schemas.all);
       expect(spy.callCount).to.be(1);
       expect(spy.firstCall.args[0]).to.be(states);
+      AggConfig.ensureIds.restore();
     });
 
     describe('defaults', function () {
@@ -135,17 +136,17 @@ describe('AggConfigs', function () {
       });
 
       it('should only set the number of defaults defined by the max', function () {
-        let ac = new AggConfigs(vis);
+        const ac = new AggConfigs(vis.indexPattern, [], vis.type.schemas.all);
         expect(ac.bySchemaName.metric).to.have.length(2);
       });
 
       it('should set the defaults defined in the schema when none exist', function () {
-        let ac = new AggConfigs(vis);
+        const ac = new AggConfigs(vis.indexPattern, [], vis.type.schemas.all);
         expect(ac).to.have.length(3);
       });
 
       it('should NOT set the defaults defined in the schema when some exist', function () {
-        let ac = new AggConfigs(vis, [{ schema: 'segment', type: 'date_histogram' }]);
+        const ac = new AggConfigs(vis.indexPattern, [{ schema: 'segment', type: 'date_histogram' }], vis.type.schemas.all);
         expect(ac).to.have.length(3);
         expect(ac.bySchemaName.segment[0].type.name).to.equal('date_histogram');
       });
@@ -154,7 +155,7 @@ describe('AggConfigs', function () {
 
   describe('#getRequestAggs', function () {
     it('performs a stable sort, but moves metrics to the bottom', function () {
-      let vis = new Vis(indexPattern, {
+      const vis = new Vis(indexPattern, {
         type: 'histogram',
         aggs: [
           { type: 'avg', schema: 'metric' },
@@ -167,8 +168,8 @@ describe('AggConfigs', function () {
         ]
       });
 
-      let sorted = vis.aggs.getRequestAggs();
-      let aggs = _.indexBy(vis.aggs, function (agg) {
+      const sorted = vis.aggs.getRequestAggs();
+      const aggs = _.indexBy(vis.aggs, function (agg) {
         return agg.type.name;
       });
 
@@ -185,7 +186,7 @@ describe('AggConfigs', function () {
 
   describe('#getResponseAggs', function () {
     it('returns all request aggs for basic aggs', function () {
-      let vis = new Vis(indexPattern, {
+      const vis = new Vis(indexPattern, {
         type: 'histogram',
         aggs: [
           { type: 'terms', schema: 'split' },
@@ -194,8 +195,8 @@ describe('AggConfigs', function () {
         ]
       });
 
-      let sorted = vis.aggs.getResponseAggs();
-      let aggs = _.indexBy(vis.aggs, function (agg) {
+      const sorted = vis.aggs.getResponseAggs();
+      const aggs = _.indexBy(vis.aggs, function (agg) {
         return agg.type.name;
       });
 
@@ -206,17 +207,17 @@ describe('AggConfigs', function () {
     });
 
     it('expands aggs that have multiple responses', function () {
-      let vis = new Vis(indexPattern, {
+      const vis = new Vis(indexPattern, {
         type: 'histogram',
         aggs: [
           { type: 'terms', schema: 'split' },
           { type: 'date_histogram', schema: 'segment' },
-          { type: 'percentiles', schema: 'metric', params: { percents: [1, 2, 3]} }
+          { type: 'percentiles', schema: 'metric', params: { percents: [1, 2, 3] } }
         ]
       });
 
-      let sorted = vis.aggs.getResponseAggs();
-      let aggs = _.indexBy(vis.aggs, function (agg) {
+      const sorted = vis.aggs.getResponseAggs();
+      const aggs = _.indexBy(vis.aggs, function (agg) {
         return agg.type.name;
       });
 
@@ -231,14 +232,14 @@ describe('AggConfigs', function () {
 
   describe('#toDsl', function () {
     it('uses the sorted aggs', function () {
-      let vis = new Vis(indexPattern, { type: 'histogram' });
+      const vis = new Vis(indexPattern, { type: 'histogram' });
       sinon.spy(vis.aggs, 'getRequestAggs');
       vis.aggs.toDsl();
       expect(vis.aggs.getRequestAggs).to.have.property('callCount', 1);
     });
 
     it('calls aggConfig#toDsl() on each aggConfig and compiles the nested output', function () {
-      let vis = new Vis(indexPattern, {
+      const vis = new Vis(indexPattern, {
         type: 'histogram',
         aggs: [
           { type: 'date_histogram', schema: 'segment' },
@@ -246,12 +247,10 @@ describe('AggConfigs', function () {
         ]
       });
 
-      let aggInfos = vis.aggs.map(function (aggConfig) {
-        let football = {};
+      const aggInfos = vis.aggs.map(function (aggConfig) {
+        const football = {};
 
-        sinon.stub(aggConfig, 'toDsl', function () {
-          return football;
-        });
+        sinon.stub(aggConfig, 'toDsl').returns(football);
 
         return {
           id: aggConfig.id,
@@ -260,7 +259,7 @@ describe('AggConfigs', function () {
       });
 
       (function recurse(lvl) {
-        let info = aggInfos.shift();
+        const info = aggInfos.shift();
 
         expect(lvl).to.have.property(info.id);
         expect(lvl[info.id]).to.be(info.football);
@@ -274,7 +273,7 @@ describe('AggConfigs', function () {
     });
 
     it('skips aggs that don\'t have a dsl representation', function () {
-      let vis = new Vis(indexPattern, {
+      const vis = new Vis(indexPattern, {
         type: 'histogram',
         aggs: [
           { type: 'date_histogram', schema: 'segment', params: { field: '@timestamp' } },
@@ -282,9 +281,9 @@ describe('AggConfigs', function () {
         ]
       });
 
-      let dsl = vis.aggs.toDsl();
-      let histo = vis.aggs.byTypeName.date_histogram[0];
-      let count = vis.aggs.byTypeName.count[0];
+      const dsl = vis.aggs.toDsl();
+      const histo = vis.aggs.byTypeName.date_histogram[0];
+      const count = vis.aggs.byTypeName.count[0];
 
       expect(dsl).to.have.property(histo.id);
       expect(dsl[histo.id]).to.be.an('object');
@@ -293,7 +292,7 @@ describe('AggConfigs', function () {
     });
 
     it('writes multiple metric aggregations at the same level', function () {
-      let vis = new Vis(indexPattern, {
+      const vis = new Vis(indexPattern, {
         type: 'histogram',
         aggs: [
           { type: 'date_histogram', schema: 'segment', params: { field: '@timestamp' } },
@@ -304,10 +303,10 @@ describe('AggConfigs', function () {
         ]
       });
 
-      let dsl = vis.aggs.toDsl();
+      const dsl = vis.aggs.toDsl();
 
-      let histo = vis.aggs.byTypeName.date_histogram[0];
-      let metrics = vis.aggs.bySchemaGroup.metrics;
+      const histo = vis.aggs.byTypeName.date_histogram[0];
+      const metrics = vis.aggs.bySchemaGroup.metrics;
 
       expect(dsl).to.have.property(histo.id);
       expect(dsl[histo.id]).to.be.an('object');
@@ -320,7 +319,7 @@ describe('AggConfigs', function () {
     });
 
     it('writes multiple metric aggregations at every level if the vis is hierarchical', function () {
-      let vis = new Vis(indexPattern, {
+      const vis = new Vis(indexPattern, {
         type: 'histogram',
         aggs: [
           { type: 'terms', schema: 'segment', params: { field: 'ip', orderBy: 1 } },
@@ -333,12 +332,12 @@ describe('AggConfigs', function () {
       });
       vis.isHierarchical = _.constant(true);
 
-      let topLevelDsl = vis.aggs.toDsl();
-      let buckets = vis.aggs.bySchemaGroup.buckets;
-      let metrics = vis.aggs.bySchemaGroup.metrics;
+      const topLevelDsl = vis.aggs.toDsl(vis.isHierarchical());
+      const buckets = vis.aggs.bySchemaGroup.buckets;
+      const metrics = vis.aggs.bySchemaGroup.metrics;
 
       (function checkLevel(dsl) {
-        let bucket = buckets.shift();
+        const bucket = buckets.shift();
         expect(dsl).to.have.property(bucket.id);
 
         expect(dsl[bucket.id]).to.be.an('object');

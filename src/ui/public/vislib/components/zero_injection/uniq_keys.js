@@ -1,8 +1,28 @@
-import _ from 'lodash';
-import VislibComponentsZeroInjectionFlattenDataProvider from 'ui/vislib/components/zero_injection/flatten_data';
-export default function UniqueXValuesUtilService(Private) {
+/*
+ * Licensed to Elasticsearch B.V. under one or more contributor
+ * license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright
+ * ownership. Elasticsearch B.V. licenses this file to you under
+ * the Apache License, Version 2.0 (the "License"); you may
+ * not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
 
-  let flattenDataArray = Private(VislibComponentsZeroInjectionFlattenDataProvider);
+import _ from 'lodash';
+import { VislibComponentsZeroInjectionFlattenDataProvider } from './flatten_data';
+
+export function VislibComponentsZeroInjectionUniqKeysProvider(Private) {
+
+  const flattenDataArray = Private(VislibComponentsZeroInjectionFlattenDataProvider);
 
   /*
    * Accepts a Kibana data object.
@@ -16,8 +36,8 @@ export default function UniqueXValuesUtilService(Private) {
       throw new TypeError('UniqueXValuesUtilService expects an object');
     }
 
-    let flattenedData = flattenDataArray(obj);
-    let uniqueXValues = new Map();
+    const flattenedData = flattenDataArray(obj);
+    const uniqueXValues = new Map();
 
     let charts;
     if (!obj.series) {
@@ -26,34 +46,33 @@ export default function UniqueXValuesUtilService(Private) {
       charts = [obj];
     }
 
-    let isDate = charts.every(function (chart) {
+    const isDate = charts.every(function (chart) {
       return chart.ordered && chart.ordered.date;
     });
 
-    let isOrdered = charts.every(function (chart) {
+    const isOrdered = charts.every(function (chart) {
       return chart.ordered;
     });
 
     flattenedData.forEach(function (d, i) {
-      let key = d.x;
-      let prev = uniqueXValues.get(key);
-
-      if (d.xi != null) {
-        i = d.xi;
-      }
+      const key = d.x;
+      const prev = uniqueXValues.get(key);
+      let sum = d.y;
 
       if (prev) {
         i = Math.min(i, prev.index);
+        sum += prev.sum;
       }
 
       uniqueXValues.set(key, {
         index: i,
         isDate: isDate,
         isOrdered: isOrdered,
-        isNumber: _.isNumber(key)
+        isNumber: _.isNumber(key),
+        sum: sum
       });
     });
 
     return uniqueXValues;
   };
-};
+}

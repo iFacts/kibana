@@ -1,5 +1,22 @@
+/*
+ * Licensed to Elasticsearch B.V. under one or more contributor
+ * license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright
+ * ownership. Elasticsearch B.V. licenses this file to you under
+ * the Apache License, Version 2.0 (the "License"); you may
+ * not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
 
-import angular from 'angular';
 import ngMock from 'ng_mock';
 import expect from 'expect.js';
 
@@ -9,16 +26,15 @@ import columns from 'fixtures/vislib/mock_data/date_histogram/_columns';
 import rows from 'fixtures/vislib/mock_data/date_histogram/_rows';
 import stackedSeries from 'fixtures/vislib/mock_data/date_histogram/_stacked_series';
 import $ from 'jquery';
-import VislibLibHandlerHandlerProvider from 'ui/vislib/lib/handler/handler';
 import FixturesVislibVisFixtureProvider from 'fixtures/vislib/_vis_fixture';
-import PersistedStatePersistedStateProvider from 'ui/persisted_state/persisted_state';
-let dateHistogramArray = [
+import '../../../../persisted_state';
+const dateHistogramArray = [
   series,
   columns,
   rows,
   stackedSeries
 ];
-let names = [
+const names = [
   'series',
   'columns',
   'rows',
@@ -27,25 +43,22 @@ let names = [
 
 dateHistogramArray.forEach(function (data, i) {
   describe('Vislib Handler Test Suite for ' + names[i] + ' Data', function () {
-    let Handler;
     let vis;
     let persistedState;
-    let events = [
+    const events = [
       'click',
       'brush'
     ];
 
     beforeEach(ngMock.module('kibana'));
-    beforeEach(ngMock.inject(function (Private) {
-      Handler = Private(VislibLibHandlerHandlerProvider);
+    beforeEach(ngMock.inject(function (Private, $injector) {
       vis = Private(FixturesVislibVisFixtureProvider)();
-      persistedState = new (Private(PersistedStatePersistedStateProvider))();
+      persistedState = new ($injector.get('PersistedState'))();
       vis.render(data, persistedState);
     }));
 
     afterEach(function () {
-      $(vis.el).remove();
-      vis = null;
+      vis.destroy();
     });
 
     describe('render Method', function () {
@@ -133,6 +146,27 @@ dateHistogramArray.forEach(function (data, i) {
       it('should destroy all the charts in the visualization', function () {
         expect(vis.handler.charts.length).to.be(0);
       });
+    });
+
+    describe('event proxying', function () {
+
+      it('should only pass the original event object to downstream handlers', function (done) {
+        const event = {};
+        const chart = vis.handler.charts[0];
+
+        const mockEmitter = function () {
+          const args = Array.from(arguments);
+          expect(args.length).to.be(2);
+          expect(args[0]).to.be('click');
+          expect(args[1]).to.be(event);
+          done();
+        };
+
+        vis.emit = mockEmitter;
+        vis.handler.enable('click', chart);
+        chart.events.emit('click', event);
+      });
+
     });
   });
 });

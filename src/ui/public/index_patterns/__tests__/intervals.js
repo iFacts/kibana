@@ -1,8 +1,26 @@
+/*
+ * Licensed to Elasticsearch B.V. under one or more contributor
+ * license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright
+ * ownership. Elasticsearch B.V. licenses this file to you under
+ * the Apache License, Version 2.0 (the "License"); you may
+ * not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 import moment from 'moment';
-import { pluck } from 'lodash';
 import expect from 'expect.js';
 import ngMock from 'ng_mock';
-import IndexPatternsIntervalsProvider from 'ui/index_patterns/_intervals';
+import { IndexPatternsIntervalsProvider } from '../_intervals';
 
 describe('Index Patterns', function () {
   describe('interval.toIndexList()', function () {
@@ -14,10 +32,10 @@ describe('Index Patterns', function () {
     }));
 
     it('should return correct indices for hourly [logstash-]YYYY.MM.DD.HH', function () {
-      let start = moment.utc('2014-01-01T07:00:00Z');
-      let end = moment.utc('2014-01-01T08:30:00Z');
-      let interval = { name: 'hours', startOf: 'hour', display: 'Hourly' };
-      let list = intervals.toIndexList('[logstash-]YYYY.MM.DD.HH', interval, start, end);
+      const start = moment.utc('2014-01-01T07:00:00Z');
+      const end = moment.utc('2014-01-01T08:30:00Z');
+      const interval = { name: 'hours', startOf: 'hour', display: 'Hourly' };
+      const list = intervals.toIndexList('[logstash-]YYYY.MM.DD.HH', interval, start, end);
       expect(list).to.eql([
         {
           index: 'logstash-2014.01.01.07',
@@ -33,10 +51,10 @@ describe('Index Patterns', function () {
     });
 
     it('should return correct indices for daily [logstash-]YYYY.MM.DD', function () {
-      let start = moment(1418244231248);
-      let end = moment(1418849261281);
-      let interval = { name: 'days', startOf: 'day', display: 'Daily' };
-      let list = intervals.toIndexList('[logstash-]YYYY.MM.DD', interval, start, end);
+      const start = moment(1418244231248);
+      const end = moment(1418849261281);
+      const interval = { name: 'days', startOf: 'day', display: 'Daily' };
+      const list = intervals.toIndexList('[logstash-]YYYY.MM.DD', interval, start, end);
       expect(list).to.eql([
         {
           index: 'logstash-2014.12.10',
@@ -82,10 +100,10 @@ describe('Index Patterns', function () {
     });
 
     it('should return correct indices for monthly [logstash-]YYYY.MM', function () {
-      let start = moment.utc('2014-12-01');
-      let end = moment.utc('2015-02-01');
-      let interval = { name: 'months', startOf: 'month', display: 'Monthly' };
-      let list = intervals.toIndexList('[logstash-]YYYY.MM', interval, start, end);
+      const start = moment.utc('2014-12-01');
+      const end = moment.utc('2015-02-01');
+      const interval = { name: 'months', startOf: 'month', display: 'Monthly' };
+      const list = intervals.toIndexList('[logstash-]YYYY.MM', interval, start, end);
       expect(list).to.eql([
         {
           index: 'logstash-2014.12',
@@ -106,10 +124,10 @@ describe('Index Patterns', function () {
     });
 
     it('should return correct indices for yearly [logstash-]YYYY', function () {
-      let start = moment.utc('2014-12-01');
-      let end = moment.utc('2015-02-01');
-      let interval = { name: 'years', startOf: 'year', display: 'Yearly' };
-      let list = intervals.toIndexList('[logstash-]YYYY', interval, start, end);
+      const start = moment.utc('2014-12-01');
+      const end = moment.utc('2015-02-01');
+      const interval = { name: 'years', startOf: 'year', display: 'Yearly' };
+      const list = intervals.toIndexList('[logstash-]YYYY', interval, start, end);
       expect(list).to.eql([
         {
           index: 'logstash-2014',
@@ -124,12 +142,12 @@ describe('Index Patterns', function () {
       ]);
     });
 
-    context('with sortDirection=asc', function () {
+    describe('with sortDirection=asc', function () {
       it('returns values in ascending order', function () {
-        let start = moment.utc('2014-12-01');
-        let end = moment.utc('2015-02-01');
-        let interval = { name: 'years', startOf: 'year', display: 'Yearly' };
-        let list = intervals.toIndexList('[logstash-]YYYY', interval, start, end, 'asc');
+        const start = moment.utc('2014-12-01');
+        const end = moment.utc('2015-02-01');
+        const interval = { name: 'years', startOf: 'year', display: 'Yearly' };
+        const list = intervals.toIndexList('[logstash-]YYYY', interval, start, end, 'asc');
         expect(list).to.eql([
           {
             index: 'logstash-2014',
@@ -145,12 +163,12 @@ describe('Index Patterns', function () {
       });
     });
 
-    context('with sortDirection=desc', function () {
+    describe('with sortDirection=desc', function () {
       it('returns values in descending order', function () {
-        let start = moment.utc('2014-12-01');
-        let end = moment.utc('2015-02-01');
-        let interval = { name: 'years', startOf: 'year', display: 'Yearly' };
-        let list = intervals.toIndexList('[logstash-]YYYY', interval, start, end, 'desc');
+        const start = moment.utc('2014-12-01');
+        const end = moment.utc('2015-02-01');
+        const interval = { name: 'years', startOf: 'year', display: 'Yearly' };
+        const list = intervals.toIndexList('[logstash-]YYYY', interval, start, end, 'desc');
         expect(list).to.eql([
           {
             index: 'logstash-2015',

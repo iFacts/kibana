@@ -1,10 +1,28 @@
+/*
+ * Licensed to Elasticsearch B.V. under one or more contributor
+ * license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright
+ * ownership. Elasticsearch B.V. licenses this file to you under
+ * the Apache License, Version 2.0 (the "License"); you may
+ * not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 import _ from 'lodash';
-import ansicolors from 'ansicolors';
-import moment from 'moment';
+import chalk from 'chalk';
 
 import LogFormat from './log_format';
 
-let statuses = [
+const statuses = [
   'err',
   'info',
   'error',
@@ -14,50 +32,52 @@ let statuses = [
   'debug'
 ];
 
-let typeColors = {
-  log: 'blue',
+const typeColors = {
+  log: 'white',
   req: 'green',
   res: 'green',
   ops: 'cyan',
+  config: 'cyan',
   err: 'red',
   info: 'green',
   error: 'red',
   warning: 'red',
-  fatal: 'magenta',
-  status: 'yellow',
-  debug: 'brightBlack',
-  server: 'brightBlack',
+  fatal: 'magentaBright',
+  status: 'yellowBright',
+  debug: 'gray',
+  server: 'gray',
   optmzr: 'white',
-  managr: 'green',
-  optimize: 'magenta',
-  listening: 'magenta'
+  manager: 'green',
+  optimize: 'magentaBright',
+  listening: 'magentaBright',
+  scss: 'magentaBright',
 };
 
-let color = _.memoize(function (name) {
-  return ansicolors[typeColors[name]] || _.identity;
+const color = _.memoize(function (name) {
+  return chalk[typeColors[name]] || _.identity;
 });
 
-let type = _.memoize(function (t) {
+const type = _.memoize(function (t) {
   return color(t)(_.pad(t, 7).slice(0, 7));
 });
 
-let workerType = process.env.kbnWorkerType ? `${type(process.env.kbnWorkerType)} ` : '';
+const workerType = process.env.kbnWorkerType ? `${type(process.env.kbnWorkerType)} ` : '';
 
-module.exports = class KbnLoggerJsonFormat extends LogFormat {
+export default class KbnLoggerStringFormat extends LogFormat {
   format(data) {
-    let time = color('time')(moment(data.timestamp).format('HH:mm:ss.SSS'));
-    let msg = data.error ? color('error')(data.error.stack) : color('message')(data.message);
+    const time = color('time')(this.extractAndFormatTimestamp(data, 'HH:mm:ss.SSS'));
+    const msg = data.error ? color('error')(data.error.stack) : color('message')(data.message);
 
-    let tags = _(data.tags)
-    .sortBy(function (tag) {
-      if (color(tag) === _.identity) return `2${tag}`;
-      if (_.includes(statuses, tag)) return `0${tag}`;
-      return `1${tag}`;
-    })
-    .reduce(function (s, t) {
-      return s + `[${ color(t)(t) }]`;
-    }, '');
+    const tags = _(data.tags)
+      .sortBy(function (tag) {
+        if (color(tag) === _.identity) return `2${tag}`;
+        if (_.includes(statuses, tag)) return `0${tag}`;
+        return `1${tag}`;
+      })
+      .reduce(function (s, t) {
+        return s + `[${ color(t)(t) }]`;
+      }, '');
 
     return `${workerType}${type(data.type)} [${time}] ${tags} ${msg}`;
   }
-};
+}

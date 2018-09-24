@@ -1,8 +1,27 @@
-import sinon from 'auto-release-sinon';
+/*
+ * Licensed to Elasticsearch B.V. under one or more contributor
+ * license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright
+ * ownership. Elasticsearch B.V. licenses this file to you under
+ * the Apache License, Version 2.0 (the "License"); you may
+ * not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
+import sinon from 'sinon';
 import expect from 'expect.js';
 import ngMock from 'ng_mock';
-import 'ui/listen';
-import EventsProvider from 'ui/events';
+import '..';
+import { EventsProvider } from '../../events';
 
 describe('listen component', function () {
 
@@ -22,8 +41,8 @@ describe('listen component', function () {
   });
 
   it('binds to an event emitter', function () {
-    let emitter = new Events();
-    let $scope = $rootScope.$new();
+    const emitter = new Events();
+    const $scope = $rootScope.$new();
 
     function handler() {}
     $scope.$listen(emitter, 'hello', handler);
@@ -33,8 +52,8 @@ describe('listen component', function () {
   });
 
   it('binds to $scope, waiting for the destroy event', function () {
-    let emitter = new Events();
-    let $scope = $rootScope.$new();
+    const emitter = new Events();
+    const $scope = $rootScope.$new();
 
     sinon.stub($scope, '$on');
     sinon.stub($rootScope, '$on');
@@ -45,14 +64,14 @@ describe('listen component', function () {
     expect($rootScope.$on).to.have.property('callCount', 0);
     expect($scope.$on).to.have.property('callCount', 1);
 
-    let call = $scope.$on.firstCall;
+    const call = $scope.$on.firstCall;
     expect(call.args[0]).to.be('$destroy');
     expect(call.args[1]).to.be.a('function');
   });
 
   it('unbinds the event handler when $destroy is triggered', function () {
-    let emitter = new Events();
-    let $scope = $rootScope.$new();
+    const emitter = new Events();
+    const $scope = $rootScope.$new();
 
     sinon.stub($scope, '$on');
     sinon.stub(emitter, 'off');
@@ -62,7 +81,7 @@ describe('listen component', function () {
     $scope.$listen(emitter, 'hello', handler);
 
     // get the unbinder that was registered to $scope
-    let unbinder = $scope.$on.firstCall.args[1];
+    const unbinder = $scope.$on.firstCall.args[1];
 
     // call the unbinder
     expect(emitter.off).to.have.property('callCount', 0);
@@ -70,7 +89,7 @@ describe('listen component', function () {
     expect(emitter.off).to.have.property('callCount', 1);
 
     // check that the off args were as expected
-    let call = emitter.off.firstCall;
+    const call = emitter.off.firstCall;
     expect(call.args[0]).to.be('hello');
     expect(call.args[1]).to.be(handler);
   });

@@ -1,202 +1,233 @@
-import {
-  bdd,
-  common,
-  headerPage,
-  scenarioManager,
-  settingsPage,
-  visualizePage
-} from '../../../support';
+/*
+ * Licensed to Elasticsearch B.V. under one or more contributor
+ * license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright
+ * ownership. Elasticsearch B.V. licenses this file to you under
+ * the Apache License, Version 2.0 (the "License"); you may
+ * not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
 
-(function () {
-  var expect = require('expect.js');
+import expect from 'expect.js';
 
-  (function () {
-    bdd.describe('visualize app', function describeIndexTests() {
-      bdd.before(function () {
-        var fromTime = '2015-09-19 06:31:44.000';
-        var toTime = '2015-09-23 18:31:44.000';
+export default function ({ getService, getPageObjects }) {
+  const log = getService('log');
+  const remote = getService('remote');
+  const retry = getService('retry');
+  const PageObjects = getPageObjects(['common', 'visualize', 'header', 'settings']);
 
-        return scenarioManager.reload('emptyKibana')
-        .then(function () {
-          common.debug('navigateTo');
-          return settingsPage.navigateTo();
-        })
-        .then(function () {
-          common.debug('createIndexPattern');
-          return settingsPage.createIndexPattern();
-        })
-        .then(function () {
-          return settingsPage.clickAdvancedTab();
-        })
-        .then(function GetAdvancedSetting() {
-          common.debug('check for required UTC timezone');
-          return settingsPage.getAdvancedSettings('dateFormat:tz');
-        })
-        .then(function (advancedSetting) {
-          expect(advancedSetting).to.be('UTC');
-        })
-        .then(function () {
-          common.debug('navigateToApp visualize');
-          return common.navigateToApp('visualize');
-        })
-        .then(function () {
-          common.debug('clickAreaChart');
-          return visualizePage.clickAreaChart();
-        })
-        .then(function clickNewSearch() {
-          common.debug('clickNewSearch');
-          return visualizePage.clickNewSearch();
-        })
-        .then(function setAbsoluteRange() {
-          common.debug('Set absolute time range from \"' + fromTime + '\" to \"' + toTime + '\"');
-          return headerPage.setAbsoluteRange(fromTime, toTime);
-        })
-        .then(function clickBucket() {
-          common.debug('Click X-Axis');
-          return visualizePage.clickBucket('X-Axis');
-        })
-        .then(function selectAggregation() {
-          common.debug('Click Date Histogram');
-          return visualizePage.selectAggregation('Date Histogram');
-        })
-        .then(function getField() {
-          common.debug('Check field value');
-          return visualizePage.getField();
-        })
-        .then(function (fieldValue) {
-          common.debug('fieldValue = ' + fieldValue);
-          expect(fieldValue).to.be('@timestamp');
-        })
-        .then(function getInterval() {
-          return visualizePage.getInterval();
-        })
-        .then(function (intervalValue) {
-          common.debug('intervalValue = ' + intervalValue);
-          expect(intervalValue).to.be('Auto');
-        })
-        .then(function clickGo() {
-          return visualizePage.clickGo();
-        })
-        .then(function getSpinnerDone() {
-          common.debug('Waiting...');
-          return headerPage.getSpinnerDone();
-        })
-        .catch(common.handleError(this));
+  describe('area charts', function indexPatternCreation() {
+    const vizName1 = 'Visualization AreaChart Name Test';
+
+    const initAreaChart = async () => {
+      const fromTime = '2015-09-19 06:31:44.000';
+      const toTime = '2015-09-23 18:31:44.000';
+
+      log.debug('navigateToApp visualize');
+      await PageObjects.visualize.navigateToNewVisualization();
+      log.debug('clickAreaChart');
+      await PageObjects.visualize.clickAreaChart();
+      log.debug('clickNewSearch');
+      await PageObjects.visualize.clickNewSearch();
+      log.debug('Set absolute time range from \"' + fromTime + '\" to \"' + toTime + '\"');
+      await PageObjects.header.setAbsoluteRange(fromTime, toTime);
+      log.debug('Click X-Axis');
+      await PageObjects.visualize.clickBucket('X-Axis');
+      log.debug('Click Date Histogram');
+      await PageObjects.visualize.selectAggregation('Date Histogram');
+      log.debug('Check field value');
+      const fieldValue = await PageObjects.visualize.getField();
+      log.debug('fieldValue = ' + fieldValue);
+      expect(fieldValue).to.be('@timestamp');
+      const intervalValue = await PageObjects.visualize.getInterval();
+      log.debug('intervalValue = ' + intervalValue);
+      expect(intervalValue).to.be('Auto');
+      return PageObjects.visualize.clickGo();
+    };
+
+    before(initAreaChart);
+
+    it('should save and load with special characters', async function () {
+      const vizNamewithSpecialChars = vizName1 + '/?&=%';
+      await PageObjects.visualize.saveVisualizationExpectSuccess(vizNamewithSpecialChars);
+      const pageTitle = await PageObjects.common.getBreadcrumbPageTitle();
+      log.debug(`Save viz page title is ${pageTitle}`);
+      expect(pageTitle).to.contain(vizNamewithSpecialChars);
+      await PageObjects.visualize.waitForVisualizationSavedToastGone();
+    });
+
+    it('should save and load with non-ascii characters', async function () {
+      const vizNamewithSpecialChars = `${vizName1} with Umlaut ä`;
+      await PageObjects.visualize.saveVisualizationExpectSuccess(vizNamewithSpecialChars);
+      const pageTitle = await PageObjects.common.getBreadcrumbPageTitle();
+      log.debug(`Saved viz page title with umlaut is ${pageTitle}`);
+      expect(pageTitle).to.contain(vizNamewithSpecialChars);
+    });
+
+    it('should save and load', async function () {
+      await PageObjects.visualize.saveVisualizationExpectSuccess(vizName1);
+      const pageTitle = await PageObjects.common.getBreadcrumbPageTitle();
+      log.debug(`Saved viz page title is ${pageTitle}`);
+      expect(pageTitle).to.contain(vizName1);
+      await PageObjects.visualize.waitForVisualizationSavedToastGone();
+      await PageObjects.visualize.loadSavedVisualization(vizName1);
+      await PageObjects.visualize.waitForVisualization();
+      return PageObjects.common.sleep(2000);
+    });
+
+    it('should have inspector enabled', async function () {
+      const spyToggleExists = await PageObjects.visualize.isInspectorButtonEnabled();
+      expect(spyToggleExists).to.be(true);
+    });
+
+    it('should show correct chart', async function () {
+      const xAxisLabels = [ '2015-09-20 00:00', '2015-09-21 00:00',
+        '2015-09-22 00:00', '2015-09-23 00:00'
+      ];
+      const yAxisLabels = ['0', '200', '400', '600', '800', '1,000', '1,200', '1,400', '1,600'];
+      const expectedAreaChartData = [37, 202, 740, 1437, 1371, 751, 188, 31, 42, 202,
+        683, 1361, 1415, 707, 177, 27, 32, 175, 707, 1408, 1355, 726, 201, 29
+      ];
+
+      await retry.try(async function tryingForTime() {
+        const labels = await PageObjects.visualize.getXAxisLabels();
+        log.debug('X-Axis labels = ' + labels);
+        expect(labels).to.eql(xAxisLabels);
+      });
+      const labels = await PageObjects.visualize.getYAxisLabels();
+      log.debug('Y-Axis labels = ' + labels);
+      expect(labels).to.eql(yAxisLabels);
+      const paths = await PageObjects.visualize.getAreaChartData('Count');
+      log.debug('expectedAreaChartData = ' + expectedAreaChartData);
+      log.debug('actual chart data =     ' + paths);
+      expect(paths).to.eql(expectedAreaChartData);
+    });
+
+    it('should show correct data', async function () {
+      const expectedTableData = [
+        ['2015-09-20 00:00', '37'],
+        ['2015-09-20 03:00', '202'],
+        ['2015-09-20 06:00', '740'],
+        ['2015-09-20 09:00', '1,437'],
+        ['2015-09-20 12:00', '1,371'],
+        ['2015-09-20 15:00', '751'],
+        ['2015-09-20 18:00', '188'],
+        ['2015-09-20 21:00', '31'],
+        ['2015-09-21 00:00', '42'],
+        ['2015-09-21 03:00', '202'],
+        ['2015-09-21 06:00', '683'],
+        ['2015-09-21 09:00', '1,361'],
+        ['2015-09-21 12:00', '1,415'],
+        ['2015-09-21 15:00', '707'],
+        ['2015-09-21 18:00', '177'],
+        ['2015-09-21 21:00', '27'],
+        ['2015-09-22 00:00', '32'],
+        ['2015-09-22 03:00', '175'],
+        ['2015-09-22 06:00', '707'],
+        ['2015-09-22 09:00', '1,408'],
+        ['2015-09-22 12:00', '1,355'],
+        ['2015-09-22 15:00', '726'],
+        ['2015-09-22 18:00', '201'],
+        ['2015-09-22 21:00', '29']
+      ];
+
+      await PageObjects.visualize.openInspector();
+      await PageObjects.visualize.setInspectorTablePageSize(50);
+      const data = await PageObjects.visualize.getInspectorTableData();
+      log.debug('getDataTableData = ' + data);
+      expect(data).to.eql(expectedTableData);
+    });
+
+    it('should hide side editor if embed is set to true in url', async () => {
+      const url = await remote.getCurrentUrl();
+      const embedUrl = url.split('/visualize/').pop().replace('?_g=', '?embed=true&_g=');
+      await PageObjects.common.navigateToUrl('visualize', embedUrl);
+      await PageObjects.header.waitUntilLoadingHasFinished();
+      const sideEditorExists = await PageObjects.visualize.getSideEditorExists();
+      expect(sideEditorExists).to.be(false);
+    });
+
+    describe.skip('switch between Y axis scale types', () => {
+      before(initAreaChart);
+      const axisId = 'ValueAxis-1';
+
+      it('should show ticks on selecting log scale', async () => {
+        await PageObjects.visualize.clickMetricsAndAxes();
+        await PageObjects.visualize.clickYAxisOptions(axisId);
+        await PageObjects.visualize.selectYAxisScaleType(axisId, 'log');
+        await PageObjects.visualize.clickYAxisAdvancedOptions(axisId);
+        await PageObjects.visualize.changeYAxisFilterLabelsCheckbox(axisId, false);
+        await PageObjects.visualize.clickGo();
+        const labels = await PageObjects.visualize.getYAxisLabels();
+        const expectedLabels = [
+          '2', '3', '5', '7', '10', '20', '30', '50', '70', '100', '200',
+          '300', '500', '700', '1,000', '2,000', '3,000', '5,000', '7,000',
+        ];
+        expect(labels).to.eql(expectedLabels);
       });
 
-      bdd.describe('area charts', function indexPatternCreation() {
-        var testSubName = 'AreaChart';
-        var vizName1 = 'Visualization ' + testSubName;
+      it('should show filtered ticks on selecting log scale', async () => {
+        await PageObjects.visualize.changeYAxisFilterLabelsCheckbox(axisId, true);
+        await PageObjects.visualize.clickGo();
+        const labels = await PageObjects.visualize.getYAxisLabels();
+        const expectedLabels = [
+          '2', '3', '5', '7', '10', '20', '30', '50', '70', '100', '200',
+          '300', '500', '700', '1,000', '2,000', '3,000', '5,000', '7,000',
+        ];
+        expect(labels).to.eql(expectedLabels);
+      });
 
-        bdd.it('should save and load', function pageHeader() {
-          return visualizePage.saveVisualization(vizName1)
-          .then(function (message) {
-            common.debug('Saved viz message = ' + message);
-            expect(message).to.be('Visualization Editor: Saved Visualization \"' + vizName1 + '\"');
-          })
-          .then(function testVisualizeWaitForToastMessageGone() {
-            return visualizePage.waitForToastMessageGone();
-          })
-          .then(function loadSavedVisualization() {
-            return visualizePage.loadSavedVisualization(vizName1);
-          })
-          .then(function () {
-            return visualizePage.waitForVisualization();
-          })
-          // We have to sleep sometime between loading the saved visTitle
-          // and trying to access the chart below with getXAxisLabels
-          // otherwise it hangs.
-          .then(function sleep() {
-            return common.sleep(2000);
-          })
-          .catch(common.handleError(this));
-        });
+      it('should show ticks on selecting square root scale', async () => {
+        await PageObjects.visualize.selectYAxisScaleType(axisId, 'square root');
+        await PageObjects.visualize.changeYAxisFilterLabelsCheckbox(axisId, false);
+        await PageObjects.visualize.clickGo();
+        const labels = await PageObjects.visualize.getYAxisLabels();
+        const expectedLabels = [
+          '0', '200', '400', '600', '800', '1,000', '1,200', '1,400', '1,600',
+        ];
+        expect(labels).to.eql(expectedLabels);
+      });
 
+      it('should show filtered ticks on selecting square root scale', async () => {
+        await PageObjects.visualize.changeYAxisFilterLabelsCheckbox(axisId, true);
+        await PageObjects.visualize.clickGo();
+        const labels = await PageObjects.visualize.getYAxisLabels();
+        const expectedLabels = [
+          '200', '400', '600', '800', '1,000', '1,200', '1,400',
+        ];
+        expect(labels).to.eql(expectedLabels);
+      });
 
-        bdd.it('should show correct chart, take screenshot', function pageHeader() {
-          var chartHeight = 0;
-          var xAxisLabels = [ '2015-09-20 00:00', '2015-09-21 00:00',
-            '2015-09-22 00:00', '2015-09-23 00:00'
-          ];
-          var yAxisLabels = ['0','200','400','600','800','1,000','1,200','1,400','1,600'];
-          var expectedAreaChartData = [37, 202, 740, 1437, 1371, 751, 188, 31, 42, 202,
-            683, 1361, 1415, 707, 177, 27, 32, 175, 707, 1408, 1355, 726, 201, 29
-          ];
+      it('should show ticks on selecting linear scale', async () => {
+        await PageObjects.visualize.selectYAxisScaleType(axisId, 'linear');
+        await PageObjects.visualize.changeYAxisFilterLabelsCheckbox(axisId, false);
+        await PageObjects.visualize.clickGo();
+        const labels = await PageObjects.visualize.getYAxisLabels();
+        log.debug(labels);
+        const expectedLabels = [
+          '0', '200', '400', '600', '800', '1,000', '1,200', '1,400', '1,600',
+        ];
+        expect(labels).to.eql(expectedLabels);
+      });
 
-          return common.try(function tryingForTime() {
-            return visualizePage.getXAxisLabels()
-            .then(function compareLabels(labels) {
-              common.debug('X-Axis labels = ' + labels);
-              expect(labels).to.eql(xAxisLabels);
-            });
-          })
-          .then(function getYAxisLabels() {
-            return visualizePage.getYAxisLabels();
-          })
-          .then(function (labels) {
-            common.debug('Y-Axis labels = ' + labels);
-            expect(labels).to.eql(yAxisLabels);
-          })
-          .then(function getAreaChartData() {
-            return visualizePage.getAreaChartData('Count');
-          })
-          .then(function (paths) {
-            common.debug('expectedAreaChartData = ' + expectedAreaChartData);
-            common.debug('actual chart data =     ' + paths);
-            expect(paths).to.eql(expectedAreaChartData);
-          })
-          .then(function takeScreenshot() {
-            common.debug('Take screenshot');
-            common.saveScreenshot('./screenshot-' + testSubName + '.png');
-          })
-          .catch(common.handleError(this));
-        });
-
-
-        bdd.it('should show correct data', function pageHeader() {
-          var expectedTableData = [ 'September 20th 2015, 00:00:00.000 37',
-            'September 20th 2015, 03:00:00.000 202',
-            'September 20th 2015, 06:00:00.000 740',
-            'September 20th 2015, 09:00:00.000 1,437',
-            'September 20th 2015, 12:00:00.000 1,371',
-            'September 20th 2015, 15:00:00.000 751',
-            'September 20th 2015, 18:00:00.000 188',
-            'September 20th 2015, 21:00:00.000 31',
-            'September 21st 2015, 00:00:00.000 42',
-            'September 21st 2015, 03:00:00.000 202',
-            'September 21st 2015, 06:00:00.000 683',
-            'September 21st 2015, 09:00:00.000 1,361',
-            'September 21st 2015, 12:00:00.000 1,415',
-            'September 21st 2015, 15:00:00.000 707',
-            'September 21st 2015, 18:00:00.000 177',
-            'September 21st 2015, 21:00:00.000 27',
-            'September 22nd 2015, 00:00:00.000 32',
-            'September 22nd 2015, 03:00:00.000 175',
-            'September 22nd 2015, 06:00:00.000 707',
-            'September 22nd 2015, 09:00:00.000 1,408',
-            'September 22nd 2015, 12:00:00.000 1,355',
-            'September 22nd 2015, 15:00:00.000 726',
-            'September 22nd 2015, 18:00:00.000 201',
-            'September 22nd 2015, 21:00:00.000 29'
-          ];
-
-          return visualizePage.collapseChart()
-          .then(function setPageSize() {
-            return settingsPage.setPageSize('All');
-          })
-          .then(function getDataTableData() {
-            return visualizePage.getDataTableData();
-          })
-          .then(function showData(data) {
-            common.debug('getDataTableData = ' + data.split('\n'));
-            expect(data.trim().split('\n')).to.eql(expectedTableData);
-          })
-          .catch(common.handleError(this));
-        });
-
-
-
+      it('should show filtered ticks on selecting linear scale', async () => {
+        await PageObjects.visualize.changeYAxisFilterLabelsCheckbox(axisId, true);
+        await PageObjects.visualize.clickGo();
+        const labels = await PageObjects.visualize.getYAxisLabels();
+        const expectedLabels = [
+          '200', '400', '600', '800', '1,000', '1,200', '1,400',
+        ];
+        expect(labels).to.eql(expectedLabels);
       });
     });
-  }());
-}());
+  });
+}

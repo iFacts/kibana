@@ -1,19 +1,34 @@
+/*
+ * Licensed to Elasticsearch B.V. under one or more contributor
+ * license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright
+ * ownership. Elasticsearch B.V. licenses this file to you under
+ * the Apache License, Version 2.0 (the "License"); you may
+ * not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 import _ from 'lodash';
 import d3 from 'd3';
-import Binder from 'ui/binder';
-import errors from 'ui/errors';
-import 'ui/vislib/styles/main.less';
-import VislibLibResizeCheckerProvider from 'ui/vislib/lib/resize_checker';
-import EventsProvider from 'ui/events';
-import VislibLibHandlerHandlerTypesProvider from 'ui/vislib/lib/handler/handler_types';
-import VislibVisualizationsVisTypesProvider from 'ui/vislib/visualizations/vis_types';
-export default function VisFactory(Private) {
+import { KbnError } from '../errors';
+import { EventsProvider } from '../events';
+import './styles/main.less';
+import { VislibVisConfigProvider } from './lib/vis_config';
+import { VisHandlerProvider } from './lib/handler';
 
-
-  let ResizeChecker = Private(VislibLibResizeCheckerProvider);
-  let Events = Private(EventsProvider);
-  let handlerTypes = Private(VislibLibHandlerHandlerTypesProvider);
-  let chartTypes = Private(VislibVisualizationsVisTypesProvider);
+export function VislibVisProvider(Private) {
+  const Events = Private(EventsProvider);
+  const VisConfig = Private(VislibVisConfigProvider);
+  const Handler = Private(VisHandlerProvider);
 
   /**
    * Creates the visualizations.
@@ -23,170 +38,139 @@ export default function VisFactory(Private) {
    * @param $el {HTMLElement} jQuery selected HTML element
    * @param config {Object} Parameters that define the chart type and chart options
    */
-  _.class(Vis).inherits(Events);
-  function Vis($el, config) {
-    if (!(this instanceof Vis)) {
-      return new Vis($el, config);
-    }
-    Vis.Super.apply(this, arguments);
-    this.el = $el.get ? $el.get(0) : $el;
-    this.binder = new Binder();
-    this.ChartClass = chartTypes[config.type];
-    this._attr = _.defaults({}, config || {}, {
-      legendOpen: true
-    });
-
-    // bind the resize function so it can be used as an event handler
-    this.resize = _.bind(this.resize, this);
-    this.resizeChecker = new ResizeChecker(this.el);
-    this.binder.on(this.resizeChecker, 'resize', this.resize);
-  }
-
-  /**
-   * Renders the visualization
-   *
-   * @method render
-   * @param data {Object} Elasticsearch query results
-   */
-  Vis.prototype.render = function (data, uiState) {
-    let chartType = this._attr.type;
-
-    if (!data) {
-      throw new Error('No valid data!');
+  class Vis extends Events {
+    constructor($el, visConfigArgs) {
+      super(arguments);
+      this.el = $el.get ? $el.get(0) : $el;
+      this.visConfigArgs = _.cloneDeep(visConfigArgs);
     }
 
-    if (this.handler) {
-      this.data = null;
-      this._runOnHandler('destroy');
+    hasLegend() {
+      return this.visConfigArgs.addLegend;
     }
+    /**
+     * Renders the visualization
+     *
+     * @method render
+     * @param data {Object} Elasticsearch query results
+     */
+    render(data, uiState) {
+      if (!data) {
+        throw new Error('No valid data!');
+      }
 
-    this.data = data;
+      if (this.handler) {
+        this.data = null;
+        this._runOnHandler('destroy');
+      }
 
-    if (!this.uiState) {
+      this.data = data;
+
       this.uiState = uiState;
-      uiState.on('change', this._uiStateChangeHandler = () => this.render(this.data, this.uiState));
+
+      this.visConfig = new VisConfig(this.visConfigArgs, this.data, this.uiState, this.el);
+
+      this.handler = new Handler(this, this.visConfig);
+      this._runOnHandler('render');
     }
 
-    this.handler = handlerTypes[chartType](this) || handlerTypes.column(this);
-    this._runOnHandler('render');
-  };
-
-  /**
-   * Resizes the visualization
-   *
-   * @method resize
-   */
-  Vis.prototype.resize = function () {
-    if (!this.data) {
-      // TODO: need to come up with a solution for resizing when no data is available
-      return;
+    getLegendLabels() {
+      return this.visConfig ? this.visConfig.get('legend.labels', null) : null;
     }
 
-    if (this.handler && _.isFunction(this.handler.resize)) {
-      this._runOnHandler('resize');
-    } else {
-      this.render(this.data, this.uiState);
+    getLegendColors() {
+      return this.visConfig ? this.visConfig.get('legend.colors', null) : null;
     }
-  };
 
-  Vis.prototype._runOnHandler = function (method) {
-    try {
-      this.handler[method]();
-    } catch (error) {
-      // If involving height and width of the container, log error to screen.
-      // Because we have to wait for the DOM element to initialize, we do not
-      // want to throw an error when the DOM `el` is zero
-      if (error instanceof errors.ContainerTooSmall ||
-        error instanceof errors.InvalidWiggleSelection ||
-        error instanceof errors.InvalidLogScaleValues ||
-        error instanceof errors.PieContainsAllZeros ||
-        error instanceof errors.NotEnoughData ||
-        error instanceof errors.NoResults) {
-        this.handler.error(error.message);
-      } else {
-        throw error;
+    _runOnHandler(method) {
+      try {
+        this.handler[method]();
+      } catch (error) {
+
+        if (error instanceof KbnError) {
+          error.displayToScreen(this.handler);
+        } else {
+          throw error;
+        }
+
       }
     }
-  };
 
-  /**
-   * Destroys the visualization
-   * Removes chart and all elements associated with it.
-   * Removes chart and all elements associated with it.
-   * Remove event listeners and pass destroy call down to owned objects.
-   *
-   * @method destroy
-   */
-  Vis.prototype.destroy = function () {
-    let selection = d3.select(this.el).select('.vis-wrapper');
+    /**
+     * Destroys the visualization
+     * Removes chart and all elements associated with it.
+     * Removes chart and all elements associated with it.
+     * Remove event listeners and pass destroy call down to owned objects.
+     *
+     * @method destroy
+     */
+    destroy() {
+      const selection = d3.select(this.el).select('.vis-wrapper');
 
-    this.binder.destroy();
-    this.resizeChecker.destroy();
-    if (this.uiState) this.uiState.off('change', this._uiStateChangeHandler);
-    if (this.handler) this._runOnHandler('destroy');
+      if (this.handler) this._runOnHandler('destroy');
 
-    selection.remove();
-    selection = null;
-  };
+      selection.remove();
+    }
 
-  /**
-   * Sets attributes on the visualization
-   *
-   * @method set
-   * @param name {String} An attribute name
-   * @param val {*} Value to which the attribute name is set
-   */
-  Vis.prototype.set = function (name, val) {
-    this._attr[name] = val;
-    this.render(this.data, this.uiState);
-  };
+    /**
+     * Sets attributes on the visualization
+     *
+     * @method set
+     * @param name {String} An attribute name
+     * @param val {*} Value to which the attribute name is set
+     */
+    set(name, val) {
+      this.visConfigArgs[name] = val;
+      this.render(this.data, this.uiState);
+    }
 
-  /**
-   * Gets attributes from the visualization
-   *
-   * @method get
-   * @param name {String} An attribute name
-   * @returns {*} The value of the attribute name
-   */
-  Vis.prototype.get = function (name) {
-    return this._attr[name];
-  };
+    /**
+     * Gets attributes from the visualization
+     *
+     * @method get
+     * @param name {String} An attribute name
+     * @returns {*} The value of the attribute name
+     */
+    get(name) {
+      return this.visConfig.get(name);
+    }
 
-  /**
-   * Turns on event listeners.
-   *
-   * @param event {String}
-   * @param listener{Function}
-   * @returns {*}
-   */
-  Vis.prototype.on = function (event, listener) {
-    let first = this.listenerCount(event) === 0;
-    let ret = Events.prototype.on.call(this, event, listener);
-    let added = this.listenerCount(event) > 0;
+    /**
+     * Turns on event listeners.
+     *
+     * @param event {String}
+     * @param listener{Function}
+     * @returns {*}
+     */
+    on(event, listener) {
+      const first = this.listenerCount(event) === 0;
+      const ret = Events.prototype.on.call(this, event, listener);
+      const added = this.listenerCount(event) > 0;
 
-    // if this is the first listener added for the event
-    // enable the event in the handler
-    if (first && added && this.handler) this.handler.enable(event);
+      // if this is the first listener added for the event
+      // enable the event in the handler
+      if (first && added && this.handler) this.handler.enable(event);
 
-    return ret;
-  };
+      return ret;
+    }
 
-  /**
-   * Turns off event listeners.
-   *
-   * @param event {String}
-   * @param listener{Function}
-   * @returns {*}
-   */
-  Vis.prototype.off = function (event, listener) {
-    let last = this.listenerCount(event) === 1;
-    let ret = Events.prototype.off.call(this, event, listener);
-    let removed = this.listenerCount(event) === 0;
+    /**
+     * Turns off event listeners.
+     *
+     * @param event {String}
+     * @param listener{Function}
+     * @returns {*}
+     */
+    off(event, listener) {
+      const last = this.listenerCount(event) === 1;
+      const ret = Events.prototype.off.call(this, event, listener);
+      const removed = this.listenerCount(event) === 0;
 
-    // Once all listeners are removed, disable the events in the handler
-    if (last && removed && this.handler) this.handler.disable(event);
-    return ret;
-  };
+      // Once all listeners are removed, disable the events in the handler
+      if (last && removed && this.handler) this.handler.disable(event);
+      return ret;
+    }
+  }
 
   return Vis;
-};
+}

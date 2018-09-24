@@ -1,22 +1,38 @@
+/*
+ * Licensed to Elasticsearch B.V. under one or more contributor
+ * license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright
+ * ownership. Elasticsearch B.V. licenses this file to you under
+ * the Apache License, Version 2.0 (the "License"); you may
+ * not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 import d3 from 'd3';
-import angular from 'angular';
 import expect from 'expect.js';
 import ngMock from 'ng_mock';
-import _ from 'lodash';
-import fixtures from 'fixtures/fake_hierarchical_data';
 import series from 'fixtures/vislib/mock_data/date_histogram/_series';
 import terms from 'fixtures/vislib/mock_data/terms/_columns';
 import $ from 'jquery';
-import VislibVisualizationsTimeMarkerProvider from 'ui/vislib/visualizations/time_marker';
+import { VislibVisualizationsTimeMarkerProvider } from '../../visualizations/time_marker';
 
 describe('Vislib Time Marker Test Suite', function () {
-  let height = 50;
-  let color = '#ff0000';
-  let opacity = 0.5;
-  let width = 3;
-  let customClass = 'custom-time-marker';
-  let dateMathTimes = ['now-1m', 'now-5m', 'now-15m'];
-  let myTimes = dateMathTimes.map(function (dateMathString) {
+  const height = 50;
+  const color = '#ff0000';
+  const opacity = 0.5;
+  const width = 3;
+  const customClass = 'custom-time-marker';
+  const dateMathTimes = ['now-1m', 'now-5m', 'now-15m'];
+  const myTimes = dateMathTimes.map(function (dateMathString) {
     return {
       time: dateMathString,
       class: customClass,
@@ -25,14 +41,14 @@ describe('Vislib Time Marker Test Suite', function () {
       width: width
     };
   });
-  let getExtent = function (dataArray, func) {
+  const getExtent = function (dataArray, func) {
     return func(dataArray, function (obj) {
       return func(obj.values, function (d) {
         return d.x;
       });
     });
   };
-  let times = [];
+  const times = [];
   let TimeMarker;
   let defaultMarker;
   let customMarker;

@@ -1,23 +1,40 @@
+/*
+ * Licensed to Elasticsearch B.V. under one or more contributor
+ * license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright
+ * ownership. Elasticsearch B.V. licenses this file to you under
+ * the Apache License, Version 2.0 (the "License"); you may
+ * not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 import angular from 'angular';
 import _ from 'lodash';
 import expect from 'expect.js';
 import ngMock from 'ng_mock';
-import 'ui/private';
+import '../../private';
 
-import docViewsRegistry from 'ui/registry/doc_views';
-import Registry from 'ui/registry/_registry';
-import 'ui/doc_viewer';
+import { DocViewsRegistryProvider } from '../../registry/doc_views';
+import { uiRegistry } from '../../registry/_registry';
+import '..';
 
 describe('docViewer', function () {
-  let $rootScope;
-  let $compile;
   let stubRegistry;
   let $elem;
   let init;
 
   beforeEach(function () {
     ngMock.module('kibana', function (PrivateProvider) {
-      stubRegistry = new Registry({
+      stubRegistry = uiRegistry({
         index: ['name'],
         order: ['order'],
         constructor() {
@@ -28,14 +45,11 @@ describe('docViewer', function () {
         }
       });
 
-      PrivateProvider.swap(docViewsRegistry, stubRegistry);
+      PrivateProvider.swap(DocViewsRegistryProvider, stubRegistry);
     });
 
     // Create the scope
-    ngMock.inject(function ($injector) {
-      $rootScope = $injector.get('$rootScope');
-      $compile = $injector.get('$compile');
-    });
+    ngMock.inject(function () {});
   });
 
   beforeEach(function () {
@@ -65,14 +79,14 @@ describe('docViewer', function () {
     }
     it('should have a tab for the view', function () {
       registerExtension();
-      registerExtension({title: 'exampleView2'});
+      registerExtension({ title: 'exampleView2' });
       init();
       expect($elem.find('.nav-tabs li').length).to.be(2);
     });
 
     it('should activate the first view in order', function () {
-      registerExtension({order: 2});
-      registerExtension({title: 'exampleView2'});
+      registerExtension({ order: 2 });
+      registerExtension({ title: 'exampleView2' });
       init();
       expect($elem.find('.nav-tabs .active').text().trim()).to.be('exampleView2');
     });

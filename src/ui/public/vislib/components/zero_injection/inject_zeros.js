@@ -1,12 +1,31 @@
-import _ from 'lodash';
-import VislibComponentsZeroInjectionOrderedXKeysProvider from 'ui/vislib/components/zero_injection/ordered_x_keys';
-import VislibComponentsZeroInjectionZeroFilledArrayProvider from 'ui/vislib/components/zero_injection/zero_filled_array';
-import VislibComponentsZeroInjectionZeroFillDataArrayProvider from 'ui/vislib/components/zero_injection/zero_fill_data_array';
-export default function ZeroInjectionUtilService(Private) {
+/*
+ * Licensed to Elasticsearch B.V. under one or more contributor
+ * license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright
+ * ownership. Elasticsearch B.V. licenses this file to you under
+ * the Apache License, Version 2.0 (the "License"); you may
+ * not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
 
-  let orderXValues = Private(VislibComponentsZeroInjectionOrderedXKeysProvider);
-  let createZeroFilledArray = Private(VislibComponentsZeroInjectionZeroFilledArrayProvider);
-  let zeroFillDataArray = Private(VislibComponentsZeroInjectionZeroFillDataArrayProvider);
+import { VislibComponentsZeroInjectionOrderedXKeysProvider } from './ordered_x_keys';
+import { VislibComponentsZeroInjectionZeroFilledArrayProvider } from './zero_filled_array';
+import { VislibComponentsZeroInjectionZeroFillDataArrayProvider } from './zero_fill_data_array';
+
+export function VislibComponentsZeroInjectionInjectZerosProvider(Private) {
+
+  const orderXValues = Private(VislibComponentsZeroInjectionOrderedXKeysProvider);
+  const createZeroFilledArray = Private(VislibComponentsZeroInjectionZeroFilledArrayProvider);
+  const zeroFillDataArray = Private(VislibComponentsZeroInjectionZeroFillDataArrayProvider);
 
   /*
    * A Kibana data object may have multiple series with different array lengths.
@@ -19,32 +38,14 @@ export default function ZeroInjectionUtilService(Private) {
    * and injects zeros where needed.
    */
 
-  function getDataArray(obj) {
-    if (obj.rows) {
-      return obj.rows;
-    } else if (obj.columns) {
-      return obj.columns;
-    } else if (obj.series) {
-      return [obj];
-    }
-  }
+  return function (obj, data, orderBucketsBySum = false) {
+    const keys = orderXValues(data, orderBucketsBySum);
 
-  return function (obj) {
-    if (!_.isObject(obj) || !obj.rows && !obj.columns && !obj.series) {
-      throw new TypeError('ZeroInjectionUtilService expects an object with a series, rows, or columns key');
-    }
-
-    let keys = orderXValues(obj);
-    let arr = getDataArray(obj);
-
-    arr.forEach(function (object) {
-      object.series.forEach(function (series) {
-        let zeroArray = createZeroFilledArray(keys);
-
-        series.values = zeroFillDataArray(zeroArray, series.values);
-      });
+    obj.forEach(function (series) {
+      const zeroArray = createZeroFilledArray(keys, series.label);
+      series.values = zeroFillDataArray(zeroArray, series.values);
     });
 
     return obj;
   };
-};
+}

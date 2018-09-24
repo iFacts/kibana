@@ -1,156 +1,200 @@
-import {
-  bdd,
-  common,
-  headerPage,
-  scenarioManager,
-  settingsPage,
-  visualizePage
-} from '../../../support';
+/*
+ * Licensed to Elasticsearch B.V. under one or more contributor
+ * license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright
+ * ownership. Elasticsearch B.V. licenses this file to you under
+ * the Apache License, Version 2.0 (the "License"); you may
+ * not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
 
-(function () {
-  var expect = require('expect.js');
+import expect from 'expect.js';
 
-  (function () {
-    bdd.describe('visualize app', function describeIndexTests() {
-      bdd.before(function () {
-        var fromTime = '2015-09-19 06:31:44.000';
-        var toTime = '2015-09-23 18:31:44.000';
+export default function ({ getService, getPageObjects }) {
+  const log = getService('log');
+  const retry = getService('retry');
+  const PageObjects = getPageObjects(['common', 'visualize', 'header']);
 
-        return scenarioManager.reload('emptyKibana')
-        .then(function () {
-          common.debug('navigateTo');
-          return settingsPage.navigateTo();
-        })
-        .then(function () {
-          common.debug('createIndexPattern');
-          return settingsPage.createIndexPattern();
-        })
-        .then(function () {
-          return settingsPage.clickAdvancedTab();
-        })
-        .then(function GetAdvancedSetting() {
-          common.debug('check for required UTC timezone');
-          return settingsPage.getAdvancedSettings('dateFormat:tz');
-        })
-        .then(function (advancedSetting) {
-          expect(advancedSetting).to.be('UTC');
-        })
-        .then(function () {
-          common.debug('navigateToApp visualize');
-          return common.navigateToApp('visualize');
-        })
-        .then(function () {
-          common.debug('clickLineChart');
-          return visualizePage.clickLineChart();
-        })
-        .then(function clickNewSearch() {
-          return visualizePage.clickNewSearch();
-        })
-        .then(function setAbsoluteRange() {
-          common.debug('Set absolute time range from \"' + fromTime + '\" to \"' + toTime + '\"');
-          return headerPage.setAbsoluteRange(fromTime, toTime);
-        })
-        .then(function clickBucket() {
-          common.debug('Bucket = Split Chart');
-          return visualizePage.clickBucket('Split Chart');
-        })
-        .then(function selectAggregation() {
-          common.debug('Aggregation = Terms');
-          return visualizePage.selectAggregation('Terms');
-        })
-        .then(function selectField() {
-          common.debug('Field = extension');
-          return visualizePage.selectField('extension.raw');
-        })
-        .then(function setInterval() {
-          common.debug('switch from Rows to Columns');
-          return visualizePage.clickColumns();
-        })
-        .then(function clickGo() {
-          return visualizePage.clickGo();
-        })
-        .then(function () {
-          return headerPage.getSpinnerDone(); // only matches the hidden spinner
-        })
-        .catch(common.handleError(this));
-      });
+  describe('line charts', function () {
+    const vizName1 = 'Visualization LineChart';
 
-      bdd.describe('line charts', function indexPatternCreation() {
-        var testSubName = 'LineChart';
-        var vizName1 = 'Visualization ' + testSubName;
+    const initLineChart = async function () {
+      const fromTime = '2015-09-19 06:31:44.000';
+      const toTime = '2015-09-23 18:31:44.000';
 
-        bdd.it('should be able to save and load', function pageHeader() {
+      log.debug('navigateToApp visualize');
+      await PageObjects.visualize.navigateToNewVisualization();
+      log.debug('clickLineChart');
+      await PageObjects.visualize.clickLineChart();
+      await PageObjects.visualize.clickNewSearch();
+      log.debug('Set absolute time range from \"' + fromTime + '\" to \"' + toTime + '\"');
+      await PageObjects.header.setAbsoluteRange(fromTime, toTime);
+      log.debug('Bucket = Split Chart');
+      await PageObjects.visualize.clickBucket('Split Chart');
+      log.debug('Aggregation = Terms');
+      await PageObjects.visualize.selectAggregation('Terms');
+      log.debug('Field = extension');
+      await PageObjects.visualize.selectField('extension.raw');
+      log.debug('switch from Rows to Columns');
+      await PageObjects.visualize.clickColumns();
+      await PageObjects.visualize.clickGo();
+    };
 
-          common.debug('Start of test' + testSubName + 'Visualization');
-          var remote = this.remote;
+    before(initLineChart);
 
-          return visualizePage.saveVisualization(vizName1)
-          .then(function (message) {
-            common.debug('Saved viz message = ' + message);
-            expect(message).to.be('Visualization Editor: Saved Visualization \"' + vizName1 + '\"');
-          })
-          .then(function testVisualizeWaitForToastMessageGone() {
-            return visualizePage.waitForToastMessageGone();
-          })
-          .then(function () {
-            return visualizePage.loadSavedVisualization(vizName1);
-          })
-          .then(function waitForVisualization() {
-            return visualizePage.waitForVisualization();
-          })
-          .catch(common.handleError(this));
-        });
+    afterEach(async () => {
+      await PageObjects.visualize.closeInspector();
+    });
+
+    it('should show correct chart', async function () {
+
+      // this test only verifies the numerical part of this data
+      // it could also check the legend to verify the extensions
+      const expectedChartData = ['jpg 9,109', 'css 2,159', 'png 1,373', 'gif 918', 'php 445'];
+
+      // sleep a bit before trying to get the chart data
+      await PageObjects.common.sleep(3000);
+      const data = await PageObjects.visualize.getLineChartData();
+      log.debug('data=' + data);
+      const tolerance = 10; // the y-axis scale is 10000 so 10 is 0.1%
+      for (let x = 0; x < data.length; x++) {
+        log.debug('x=' + x + ' expectedChartData[x].split(\' \')[1] = ' +
+        (expectedChartData[x].split(' ')[1]).replace(',', '') + '  data[x]=' + data[x] +
+        ' diff=' + Math.abs(expectedChartData[x].split(' ')[1].replace(',', '') - data[x]));
+        expect(Math.abs(expectedChartData[x].split(' ')[1].replace(',', '') - data[x]) < tolerance).to.be.ok();
+      }
+      log.debug('Done');
+    });
 
 
-        bdd.it('should show correct chart, take screenshot', function pageHeader() {
+    it('should have inspector enabled', async function () {
+      const spyToggleExists = await PageObjects.visualize.isInspectorButtonEnabled();
+      expect(spyToggleExists).to.be(true);
+    });
 
-          var remote = this.remote;
+    it('should show correct chart order by Term', async function () {
+      // this test only verifies the numerical part of this data
+      // it could also check the legend to verify the extensions
+      const expectedChartData = ['png 1,373', 'php 445', 'jpg 9,109', 'gif 918', 'css 2,159'];
 
-          // this test only verifies the numerical part of this data
-          // it could also check the legend to verify the extensions
-          var expectedChartData = ['jpg 9,109', 'css 2,159', 'png 1,373', 'gif 918', 'php 445'];
-
-          // sleep a bit before trying to get the chart data
-          return common.sleep(3000)
-          .then(function () {
-            return visualizePage.getLineChartData('fill="#57c17b"')
-            .then(function showData(data) {
-              var tolerance = 10; // the y-axis scale is 10000 so 10 is 0.1%
-              for (var x = 0; x < data.length; x++) {
-                common.debug('x=' + x + ' expectedChartData[x].split(\' \')[1] = ' +
-                  (expectedChartData[x].split(' ')[1]).replace(',', '') + '  data[x]=' + data[x] +
-                  ' diff=' + Math.abs(expectedChartData[x].split(' ')[1].replace(',', '') - data[x]));
-                expect(Math.abs(expectedChartData[x].split(' ')[1].replace(',', '') - data[x]) < tolerance).to.be.ok();
-              }
-              common.debug('Done');
-            });
-          })
-          .then(function takeScreenshot() {
-            // take a snapshot just as an example.
-            common.debug('Take screenshot');
-            common.saveScreenshot('./screenshot-' + testSubName + '.png');
-          })
-          .catch(common.handleError(this));
-        });
-
-        bdd.it('should show correct data', function pageHeader() {
-
-          var remote = this.remote;
-          var expectedChartData = ['jpg 9,109', 'css 2,159', 'png 1,373', 'gif 918', 'php 445'];
-
-          return visualizePage.collapseChart()
-          .then(function getDataTableData() {
-            return visualizePage.getDataTableData();
-          })
-          .then(function showData(data) {
-            common.debug(data.split('\n'));
-            expect(data.trim().split('\n')).to.eql(expectedChartData);
-          })
-          .catch(common.handleError(this));
-        });
-
-
+      log.debug('Order By = Term');
+      await PageObjects.visualize.selectOrderBy('_key');
+      await PageObjects.visualize.clickGo();
+      await retry.try(async function () {
+        const data = await PageObjects.visualize.getLineChartData();
+        log.debug('data=' + data);
+        const tolerance = 10; // the y-axis scale is 10000 so 10 is 0.1%
+        for (let x = 0; x < data.length; x++) {
+          log.debug('x=' + x + ' expectedChartData[x].split(\' \')[1] = ' +
+            (expectedChartData[x].split(' ')[1]).replace(',', '') + '  data[x]=' + data[x] +
+            ' diff=' + Math.abs(expectedChartData[x].split(' ')[1].replace(',', '') - data[x]));
+          expect(Math.abs(expectedChartData[x].split(' ')[1].replace(',', '') - data[x]) < tolerance).to.be.ok();
+        }
+        log.debug('Done');
       });
     });
-  }());
-}());
+
+    it('should show correct data, ordered by Term', async function () {
+
+      const expectedChartData = [['png', '1,373'], ['php', '445'], ['jpg', '9,109'], ['gif', '918'], ['css', '2,159']];
+
+      await PageObjects.visualize.openInspector();
+      const data = await PageObjects.visualize.getInspectorTableData();
+      log.debug(data);
+      expect(data).to.eql(expectedChartData);
+    });
+
+    it('should be able to save and load', async function () {
+      await PageObjects.visualize.saveVisualizationExpectSuccess(vizName1);
+      const pageTitle = await PageObjects.common.getBreadcrumbPageTitle();
+      log.debug(`Save viz page title is ${pageTitle}`);
+      expect(pageTitle).to.contain(vizName1);
+      await PageObjects.visualize.waitForVisualizationSavedToastGone();
+      await PageObjects.visualize.loadSavedVisualization(vizName1);
+      await PageObjects.visualize.waitForVisualization();
+    });
+
+    describe.skip('switch between Y axis scale types', () => {
+      before(initLineChart);
+      const axisId = 'ValueAxis-1';
+
+      it('should show ticks on selecting log scale', async () => {
+        await PageObjects.visualize.clickMetricsAndAxes();
+        await PageObjects.visualize.clickYAxisOptions(axisId);
+        await PageObjects.visualize.selectYAxisScaleType(axisId, 'log');
+        await PageObjects.visualize.clickYAxisAdvancedOptions(axisId);
+        await PageObjects.visualize.changeYAxisFilterLabelsCheckbox(axisId, false);
+        await PageObjects.visualize.clickGo();
+        const labels = await PageObjects.visualize.getYAxisLabels();
+        const expectedLabels = [
+          '2', '3', '5', '7', '10', '20', '30', '50', '70', '100', '200',
+          '300', '500', '700', '1,000', '2,000', '3,000', '5,000', '7,000',
+        ];
+        expect(labels).to.eql(expectedLabels);
+      });
+
+      it('should show filtered ticks on selecting log scale', async () => {
+        await PageObjects.visualize.changeYAxisFilterLabelsCheckbox(axisId, true);
+        await PageObjects.visualize.clickGo();
+        const labels = await PageObjects.visualize.getYAxisLabels();
+        const expectedLabels = [
+          '2', '3', '5', '7', '10', '20', '30', '50', '70', '100', '200',
+          '300', '500', '700', '1,000', '2,000', '3,000', '5,000', '7,000',
+        ];
+        expect(labels).to.eql(expectedLabels);
+      });
+
+      it('should show ticks on selecting square root scale', async () => {
+        await PageObjects.visualize.selectYAxisScaleType(axisId, 'square root');
+        await PageObjects.visualize.changeYAxisFilterLabelsCheckbox(axisId, false);
+        await PageObjects.visualize.clickGo();
+        const labels = await PageObjects.visualize.getYAxisLabels();
+        const expectedLabels = [
+          '0', '2,000', '4,000', '6,000', '8,000', '10,000',
+        ];
+        expect(labels).to.eql(expectedLabels);
+      });
+
+      it('should show filtered ticks on selecting square root scale', async () => {
+        await PageObjects.visualize.changeYAxisFilterLabelsCheckbox(axisId, true);
+        await PageObjects.visualize.clickGo();
+        const labels = await PageObjects.visualize.getYAxisLabels();
+        const expectedLabels = [
+          '2,000', '4,000', '6,000', '8,000',
+        ];
+        expect(labels).to.eql(expectedLabels);
+      });
+
+      it('should show ticks on selecting linear scale', async () => {
+        await PageObjects.visualize.selectYAxisScaleType(axisId, 'linear');
+        await PageObjects.visualize.changeYAxisFilterLabelsCheckbox(axisId, false);
+        await PageObjects.visualize.clickGo();
+        const labels = await PageObjects.visualize.getYAxisLabels();
+        log.debug(labels);
+        const expectedLabels = [
+          '0', '2,000', '4,000', '6,000', '8,000', '10,000',
+        ];
+        expect(labels).to.eql(expectedLabels);
+      });
+
+      it('should show filtered ticks on selecting linear scale', async () => {
+        await PageObjects.visualize.changeYAxisFilterLabelsCheckbox(axisId, true);
+        await PageObjects.visualize.clickGo();
+        const labels = await PageObjects.visualize.getYAxisLabels();
+        const expectedLabels = [
+          '2,000', '4,000', '6,000', '8,000',
+        ];
+        expect(labels).to.eql(expectedLabels);
+      });
+    });
+  });
+}

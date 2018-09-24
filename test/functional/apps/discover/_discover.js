@@ -1,275 +1,408 @@
-import {
-  bdd,
-  scenarioManager,
-  common,
-  discoverPage,
-  settingsPage,
-  headerPage,
-} from '../../../support';
+/*
+ * Licensed to Elasticsearch B.V. under one or more contributor
+ * license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright
+ * ownership. Elasticsearch B.V. licenses this file to you under
+ * the Apache License, Version 2.0 (the "License"); you may
+ * not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
 
-(function () {
-  var expect = require('expect.js');
+import expect from 'expect.js';
 
-  (function () {
-    bdd.describe('discover app', function describeIndexTests() {
-      bdd.before(function () {
-        var fromTime = '2015-09-19 06:31:44.000';
-        var toTime = '2015-09-23 18:31:44.000';
+export default function ({ getService, getPageObjects }) {
+  const log = getService('log');
+  const retry = getService('retry');
+  const esArchiver = getService('esArchiver');
+  const remote = getService('remote');
+  const kibanaServer = getService('kibanaServer');
+  const filterBar = getService('filterBar');
+  const PageObjects = getPageObjects(['common', 'discover', 'header']);
+  const defaultSettings = {
+    'dateFormat:tz': 'UTC',
+    defaultIndex: 'logstash-*',
+  };
 
-        // start each test with an empty kibana index
-        return scenarioManager.reload('emptyKibana')
-        // and load a set of makelogs data
-        .then(function loadIfEmptyMakelogs() {
-          return scenarioManager.loadIfEmpty('logstashFunctional');
-        })
-        .then(function (navigateTo) {
-          common.debug('navigateTo');
-          return settingsPage.navigateTo();
-        })
-        .then(function () {
-          common.debug('createIndexPattern');
-          return settingsPage.createIndexPattern();
-        })
-        .then(function () {
-          common.debug('discover');
-          return common.navigateToApp('discover');
-        })
-        .then(function () {
-          common.debug('setAbsoluteRange');
-          return headerPage.setAbsoluteRange(fromTime, toTime);
-        })
-        .catch(common.handleError(this));
+  describe('discover app', function describeIndexTests() {
+    const fromTime = '2015-09-19 06:31:44.000';
+    const fromTimeString = 'September 19th 2015, 06:31:44.000';
+    const toTime = '2015-09-23 18:31:44.000';
+    const toTimeString = 'September 23rd 2015, 18:31:44.000';
+
+    before(async function () {
+      // delete .kibana index and update configDoc
+      await kibanaServer.uiSettings.replace(defaultSettings);
+
+      log.debug('load kibana index with default index pattern');
+      await esArchiver.load('discover');
+
+      // and load a set of makelogs data
+      await esArchiver.loadIfNeeded('logstash_functional');
+      log.debug('discover');
+      await PageObjects.common.navigateToApp('discover');
+      log.debug('setAbsoluteRange');
+      await PageObjects.header.setAbsoluteRange(fromTime, toTime);
+    });
+
+    describe('query', function () {
+      const queryName1 = 'Query # 1';
+
+      it('should show correct time range string by timepicker', async function () {
+        const actualTimeString = await PageObjects.header.getPrettyDuration();
+
+        const expectedTimeString = `${fromTimeString} to ${toTimeString}`;
+        expect(actualTimeString).to.be(expectedTimeString);
       });
 
+      it('save query should show toast message and display query name', async function () {
+        await PageObjects.discover.saveSearch(queryName1);
+        const actualQueryNameString = await PageObjects.discover.getCurrentQueryName();
+        expect(actualQueryNameString).to.be(queryName1);
+      });
 
-      bdd.describe('query', function () {
-        var queryName1 = 'Query # 1';
-        var fromTimeString = 'September 19th 2015, 06:31:44.000';
-        var toTimeString = 'September 23rd 2015, 18:31:44.000';
+      it('load query should show query name', async function () {
+        await PageObjects.discover.loadSavedSearch(queryName1);
 
-        bdd.it('should show correct time range string by timepicker', function () {
-          var expectedTimeRangeString = fromTimeString + ' to ' + toTimeString;
-          return discoverPage.getTimespanText()
-          .then(function (actualTimeString) {
-            expect(actualTimeString).to.be(expectedTimeRangeString);
-          })
-          .catch(common.handleError(this));
+        await retry.try(async function () {
+          expect(await PageObjects.discover.getCurrentQueryName()).to.be(
+            queryName1
+          );
         });
+      });
 
-
-        bdd.it('save query should show toast message and display query name', function () {
-          var expectedSavedQueryMessage = 'Discover: Saved Data Source "' + queryName1 + '"';
-          return discoverPage.saveSearch(queryName1)
-          .then(function () {
-            return headerPage.getToastMessage();
-          })
-          .then(function (toastMessage) {
-            expect(toastMessage).to.be(expectedSavedQueryMessage);
-          })
-          .then(function () {
-            return headerPage.waitForToastMessageGone();
-          })
-          .then(function () {
-            return discoverPage.getCurrentQueryName();
-          })
-          .then(function (actualQueryNameString) {
-            expect(actualQueryNameString).to.be(queryName1);
-          })
-          .catch(common.handleError(this));
+      it('should show the correct hit count', async function () {
+        const expectedHitCount = '14,004';
+        await retry.try(async function () {
+          expect(await PageObjects.discover.getHitCount()).to.be(
+            expectedHitCount
+          );
         });
+      });
 
-        bdd.it('load query should show query name', function () {
-          return discoverPage.loadSavedSearch(queryName1)
-          .then(function () {
-            return common.sleep(3000);
-          })
-          .then(function () {
-            return discoverPage.getCurrentQueryName();
-          })
-          .then(function (actualQueryNameString) {
-            expect(actualQueryNameString).to.be(queryName1);
-          })
-          .catch(common.handleError(this));
+      it('should show the correct bar chart', async function () {
+        const expectedBarChartData = [
+          35,
+          189,
+          694,
+          1347,
+          1285,
+          704,
+          176,
+          29,
+          39,
+          189,
+          640,
+          1276,
+          1327,
+          663,
+          166,
+          25,
+          30,
+          164,
+          663,
+          1320,
+          1270,
+          681,
+          188,
+          27,
+        ];
+        await verifyChartData(expectedBarChartData);
+      });
+
+      it('should show correct time range string in chart', async function () {
+        const actualTimeString = await PageObjects.discover.getChartTimespan();
+
+        const expectedTimeString = `${fromTimeString} - ${toTimeString}`;
+        expect(actualTimeString).to.be(expectedTimeString);
+      });
+
+      it('should show correct initial chart interval of Auto', async function () {
+        const actualInterval = await PageObjects.discover.getChartInterval();
+
+        const expectedInterval = 'Auto';
+        expect(actualInterval).to.be(expectedInterval);
+      });
+
+      it('should show correct data for chart interval Hourly', async function () {
+        await PageObjects.discover.setChartInterval('Hourly');
+
+        const expectedBarChartData = [
+          4,
+          7,
+          16,
+          23,
+          38,
+          87,
+          132,
+          159,
+          248,
+          320,
+          349,
+          376,
+          380,
+          324,
+          293,
+          233,
+          188,
+          125,
+          69,
+          40,
+          28,
+          17,
+          2,
+          3,
+          8,
+          10,
+          12,
+          28,
+          36,
+          84,
+          111,
+          157,
+          229,
+          292,
+          324,
+          373,
+          378,
+          345,
+          306,
+          223,
+          167,
+          124,
+          72,
+          35,
+          22,
+          11,
+          7,
+          1,
+          6,
+          5,
+          12,
+          25,
+          27,
+          76,
+          111,
+          175,
+          228,
+          294,
+          358,
+          372,
+          366,
+          344,
+          276,
+          213,
+          201,
+          113,
+          72,
+          39,
+          36,
+          12,
+          7,
+          3,
+        ];
+        await verifyChartData(expectedBarChartData);
+      });
+
+      it('should show correct data for chart interval Daily', async function () {
+        const chartInterval = 'Daily';
+        const expectedBarChartData = [4757, 4614, 4633];
+        await PageObjects.discover.setChartInterval(chartInterval);
+        await retry.try(async () => {
+          await verifyChartData(expectedBarChartData);
         });
+      });
 
-        bdd.it('should show the correct hit count', function () {
-          var expectedHitCount = '14,004';
-          return common.try(function tryingForTime() {
-            return discoverPage.getHitCount()
-            .then(function compareData(hitCount) {
-              expect(hitCount).to.be(expectedHitCount);
-            });
-          })
-          .catch(common.handleError(this));
+      it('should show correct data for chart interval Weekly', async function () {
+        const chartInterval = 'Weekly';
+        const expectedBarChartData = [4757, 9247];
+
+        await PageObjects.discover.setChartInterval(chartInterval);
+        await retry.try(async () => {
+          await verifyChartData(expectedBarChartData);
         });
+      });
 
-        bdd.it('should show the correct bar chart', function () {
-          var expectedBarChartData = [ '3.237',
-            '17.674', '64.75', '125.737', '119.962', '65.712', '16.449',
-            '2.712', '3.675', '17.674', '59.762', '119.087', '123.812',
-            '61.862', '15.487', '2.362', '2.800', '15.312', '61.862', '123.2',
-            '118.562', '63.524', '17.587', '2.537'
-          ];
-          return common.sleep(4000)
-          .then(function () {
-            return verifyChartData(expectedBarChartData);
-          })
-          .catch(common.handleError(this));
+      it('browser back button should show previous interval Daily', async function () {
+        const expectedChartInterval = 'Daily';
+        const expectedBarChartData = [4757, 4614, 4633];
+
+        await remote.goBack();
+        await retry.try(async function tryingForTime() {
+          const actualInterval = await PageObjects.discover.getChartInterval();
+          expect(actualInterval).to.be(expectedChartInterval);
         });
+        await verifyChartData(expectedBarChartData);
+      });
 
-        bdd.it('should show correct time range string in chart', function () {
-          var expectedTimeRangeString = fromTimeString + ' - ' + toTimeString;
-          return discoverPage.getChartTimespan()
-          .then(function (actualTimeString) {
-            expect(actualTimeString).to.be(expectedTimeRangeString);
-          })
-          .catch(common.handleError(this));
+      it('should show correct data for chart interval Monthly', async function () {
+        const chartInterval = 'Monthly';
+        const expectedBarChartData = [13129];
+
+        await PageObjects.discover.setChartInterval(chartInterval);
+        await verifyChartData(expectedBarChartData);
+      });
+
+      it('should show correct data for chart interval Yearly', async function () {
+        const chartInterval = 'Yearly';
+        const expectedBarChartData = [13129];
+
+        await PageObjects.discover.setChartInterval(chartInterval);
+        await verifyChartData(expectedBarChartData);
+      });
+
+      it('should show correct data for chart interval Auto', async function () {
+        const chartInterval = 'Auto';
+        const expectedBarChartData = [
+          35,
+          189,
+          694,
+          1347,
+          1285,
+          704,
+          176,
+          29,
+          39,
+          189,
+          640,
+          1276,
+          1327,
+          663,
+          166,
+          25,
+          30,
+          164,
+          663,
+          1320,
+          1270,
+          681,
+          188,
+          27,
+        ];
+
+        await PageObjects.discover.setChartInterval(chartInterval);
+        await verifyChartData(expectedBarChartData);
+      });
+
+      it('should show Auto chart interval', async function () {
+        const expectedChartInterval = 'Auto';
+
+        const actualInterval = await PageObjects.discover.getChartInterval();
+        expect(actualInterval).to.be(expectedChartInterval);
+      });
+
+      it('should not show "no results"', async () => {
+        const isVisible = await PageObjects.discover.hasNoResults();
+        expect(isVisible).to.be(false);
+      });
+
+      async function verifyChartData(expectedBarChartData) {
+        await retry.try(async function tryingForTime() {
+          const paths = await PageObjects.discover.getBarChartData();
+          // the largest bars are over 100 pixels high so this is less than 1% tolerance
+          const barHeightTolerance = 1;
+          let stringResults = '';
+          let hasFailure = false;
+          for (let y = 0; y < expectedBarChartData.length; y++) {
+            stringResults +=
+              y +
+              ': expected = ' +
+              expectedBarChartData[y] +
+              ', actual = ' +
+              paths[y] +
+              ', Pass = ' +
+              (Math.abs(expectedBarChartData[y] - paths[y]) <
+                barHeightTolerance) +
+              '\n';
+            if (
+              Math.abs(expectedBarChartData[y] - paths[y]) > barHeightTolerance
+            ) {
+              hasFailure = true;
+            }
+          }
+          if (hasFailure) {
+            log.debug(stringResults);
+            log.debug(paths);
+          }
+          for (let x = 0; x < expectedBarChartData.length; x++) {
+            expect(
+              Math.abs(expectedBarChartData[x] - paths[x]) < barHeightTolerance
+            ).to.be.ok();
+          }
         });
+      }
+    });
 
-        bdd.it('should show correct initial chart interval of 3 hours', function () {
-          var expectedChartInterval = 'by 3 hours';
-          return discoverPage.getChartInterval()
-          .then(function (actualInterval) {
-            expect(actualInterval).to.be(expectedChartInterval);
-          })
-          .catch(common.handleError(this));
-        });
+    describe('query #2, which has an empty time range', function () {
+      const fromTime = '1999-06-11 09:22:11.000';
+      const toTime = '1999-06-12 11:21:04.000';
 
-        bdd.it('should show correct data for chart interval Hourly', function () {
-          var chartInterval = 'Hourly';
-          var expectedBarChartData = [ '1.527', '2.290',
-            '5.599', '7.890', '13.236', '30.290', '46.072', '55.490', '86.8',
-            '112', '122.181', '131.6', '132.872', '113.527', '102.581',
-            '81.709', '65.672', '43.781', '24.181', '14', '9.672', '6.109',
-            '0.763', '1.018', '2.800', '3.563', '4.327', '9.672', '12.472',
-            '29.272', '38.690', '54.981', '80.181', '102.327', '113.527',
-            '130.581', '132.363', '120.654', '107.163', '78.145', '58.545',
-            '43.272', '25.199', '12.218', '7.636', '3.818', '2.545', '0.509',
-            '2.036', '1.781', '4.327', '8.654', '9.418', '26.472', '38.945',
-            '61.345', '79.672', '102.836', '125.236', '130.327', '128.036',
-            '120.4', '96.472', '74.581', '70.509', '39.709', '25.199', '13.490',
-            '12.472', '4.072', '2.290', '1.018'
-          ];
-          return discoverPage.setChartInterval(chartInterval)
-          .then(function () {
-            return common.sleep(8000);
-          })
-          .then(function () {
-            return verifyChartData(expectedBarChartData);
-          })
-          .catch(common.handleError(this));
-        });
+      before(() => {
+        log.debug('setAbsoluteRangeForAnotherQuery');
+        return PageObjects.header.setAbsoluteRange(fromTime, toTime);
+      });
 
-        bdd.it('should show correct data for chart interval Daily', function () {
-          var chartInterval = 'Daily';
-          var expectedBarChartData = [
-            '133.196', '129.192', '129.724'
-          ];
-          return discoverPage.setChartInterval(chartInterval)
-          .then(function () {
-            return common.sleep(8000);
-          })
-          .then(function () {
-            return verifyChartData(expectedBarChartData);
-          })
-          .catch(common.handleError(this));
-        });
+      it('should show "no results"', async () => {
+        const isVisible = await PageObjects.discover.hasNoResults();
+        expect(isVisible).to.be(true);
+      });
 
-        bdd.it('should show correct data for chart interval Weekly', function () {
-          var chartInterval = 'Weekly';
-          var expectedBarChartData = [ '66.598', '129.458'];
-          return discoverPage.setChartInterval(chartInterval)
-          .then(function () {
-            return common.sleep(2000);
-          })
-          .then(function () {
-            return verifyChartData(expectedBarChartData);
-          })
-          .catch(common.handleError(this));
-        });
+      it('should suggest a new time range is picked', async () => {
+        const isVisible = await PageObjects.discover.hasNoResultsTimepicker();
+        expect(isVisible).to.be(true);
+      });
 
-        bdd.it('should show correct data for chart interval Monthly', function () {
-          var chartInterval = 'Monthly';
-          var expectedBarChartData = [ '122.535'];
-          return discoverPage.setChartInterval(chartInterval)
-          .then(function () {
-            return common.sleep(2000);
-          })
-          .then(function () {
-            return verifyChartData(expectedBarChartData);
-          })
-          .catch(common.handleError(this));
-        });
+      it('should have a link that opens and closes the time picker', async function () {
+        const noResultsTimepickerLink = await PageObjects.discover.getNoResultsTimepicker();
+        expect(await PageObjects.header.isTimepickerOpen()).to.be(false);
 
-        bdd.it('should show correct data for chart interval Yearly', function () {
-          var chartInterval = 'Yearly';
-          var expectedBarChartData = [ '122.535'];
-          return discoverPage.setChartInterval(chartInterval)
-          .then(function () {
-            return common.sleep(2000);
-          })
-          .then(function () {
-            return verifyChartData(expectedBarChartData);
-          })
-          .catch(common.handleError(this));
-        });
+        await noResultsTimepickerLink.click();
+        expect(await PageObjects.header.isTimepickerOpen()).to.be(true);
 
-        bdd.it('should show correct data for chart interval Auto', function () {
-          var chartInterval = 'Auto';
-          var expectedBarChartData = [ '3.237',
-            '17.674', '64.75', '125.737', '119.962', '65.712', '16.449',
-            '2.712', '3.675', '17.674', '59.762', '119.087', '123.812',
-            '61.862', '15.487', '2.362', '2.800', '15.312', '61.862', '123.2',
-            '118.562', '63.524', '17.587', '2.537'
-          ];
-          return discoverPage.setChartInterval(chartInterval)
-          .then(function () {
-            return common.sleep(4000);
-          })
-          .then(function () {
-            return verifyChartData(expectedBarChartData);
-          })
-          .catch(common.handleError(this));
-        });
-
-        bdd.it('should show Auto chart interval of 3 hours', function () {
-          var expectedChartInterval = 'by 3 hours';
-          return discoverPage.getChartInterval()
-          .then(function (actualInterval) {
-            expect(actualInterval).to.be(expectedChartInterval);
-          })
-          .catch(common.handleError(this));
-        });
-
-
-        function verifyChartData(expectedBarChartData) {
-          return common.try(function tryingForTime() {
-            return discoverPage.getBarChartData()
-            .then(function compareData(paths) {
-              // the largest bars are over 100 pixels high so this is less than 1% tolerance
-              var barHeightTolerance = 1;
-              var stringResults = '';
-              var hasFailure = false;
-              for (var y = 0; y < expectedBarChartData.length; y++) {
-                stringResults += y + ': expected = ' + expectedBarChartData[y] + ', actual = ' + paths[y] +
-                 ', Pass = ' + (Math.abs(expectedBarChartData[y] - paths[y]) < barHeightTolerance) + '\n';
-                if ((Math.abs(expectedBarChartData[y] - paths[y]) > barHeightTolerance)) {
-                  hasFailure = true;
-                };
-              };
-              if (hasFailure) {
-                common.log(stringResults);
-                common.log(paths);
-              }
-              for (var x = 0; x < expectedBarChartData.length; x++) {
-                expect(Math.abs(expectedBarChartData[x] - paths[x]) < barHeightTolerance).to.be.ok();
-              }
-            });
-          });
-
-        }
-
+        await noResultsTimepickerLink.click();
+        expect(await PageObjects.header.isTimepickerOpen()).to.be(false);
       });
     });
-  }());
-}());
+
+    describe('filter editor', function () {
+      it('should add a phrases filter', async function () {
+        await filterBar.addFilter('extension.raw', 'is one of', 'jpg');
+        expect(await filterBar.hasFilter('extension.raw', 'jpg')).to.be(true);
+      });
+
+      it('should show the phrases if you re-open a phrases filter', async function () {
+        await filterBar.clickEditFilter('extension.raw', 'jpg');
+        const phrases = await filterBar.getFilterEditorPhrases();
+        expect(phrases.length).to.be(1);
+        expect(phrases[0]).to.be('jpg');
+      });
+    });
+
+    describe('data-shared-item', function () {
+      it('should have correct data-shared-item title and description', async () => {
+        const expected = {
+          title: 'A Saved Search',
+          description: 'A Saved Search Description',
+        };
+
+        await retry.try(async () => {
+          await PageObjects.discover.loadSavedSearch(expected.title);
+          const {
+            title,
+            description,
+          } = await PageObjects.common.getSharedItemTitleAndDescription();
+          expect(title).to.eql(expected.title);
+          expect(description).to.eql(expected.description);
+        });
+      });
+    });
+  });
+}

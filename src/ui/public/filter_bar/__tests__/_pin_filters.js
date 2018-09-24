@@ -1,14 +1,30 @@
+/*
+ * Licensed to Elasticsearch B.V. under one or more contributor
+ * license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright
+ * ownership. Elasticsearch B.V. licenses this file to you under
+ * the Apache License, Version 2.0 (the "License"); you may
+ * not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 import _ from 'lodash';
-import sinon from 'auto-release-sinon';
+import sinon from 'sinon';
 import expect from 'expect.js';
 import ngMock from 'ng_mock';
 import MockState from 'fixtures/mock_state';
-import FilterBarQueryFilterProvider from 'ui/filter_bar/query_filter';
+import { FilterBarQueryFilterProvider } from '../query_filter';
+
 describe('pin filters', function () {
-  let storeNames = {
-    app: 'appState',
-    global: 'globalState'
-  };
   let filters;
   let queryFilter;
   let $rootScope;
@@ -20,7 +36,7 @@ describe('pin filters', function () {
     'kibana/courier',
     'kibana/global_state',
     function ($provide) {
-      $provide.service('courier', require('fixtures/mock_courier'));
+      $provide.service('indexPatterns', require('fixtures/mock_index_patterns'));
 
       appState = new MockState({ filters: [] });
       $provide.service('getAppState', function () {
@@ -87,7 +103,7 @@ describe('pin filters', function () {
     });
 
     it('should move filter from appState to globalState', function () {
-      let filter = appState.filters[1];
+      const filter = appState.filters[1];
 
       queryFilter.pinFilter(filter);
       expect(globalState.filters).to.contain(filter);
@@ -96,7 +112,7 @@ describe('pin filters', function () {
     });
 
     it('should move filter from globalState to appState', function () {
-      let filter = globalState.filters[1];
+      const filter = globalState.filters[1];
 
       queryFilter.pinFilter(filter);
       expect(appState.filters).to.contain(filter);
@@ -106,8 +122,8 @@ describe('pin filters', function () {
 
 
     it('should only fire the update event', function () {
-      let emitSpy = sinon.spy(queryFilter, 'emit');
-      let filter = appState.filters[1];
+      const emitSpy = sinon.spy(queryFilter, 'emit');
+      const filter = appState.filters[1];
       $rootScope.$digest();
 
       queryFilter.pinFilter(filter);
@@ -131,8 +147,8 @@ describe('pin filters', function () {
     });
 
     it('should swap the filters in both states', function () {
-      let appSample = _.sample(appState.filters);
-      let globalSample = _.sample(globalState.filters);
+      const appSample = _.sample(appState.filters);
+      const globalSample = _.sample(globalState.filters);
 
       queryFilter.pinAll();
       expect(globalState.filters).to.have.length(5);

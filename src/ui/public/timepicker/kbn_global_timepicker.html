@@ -1,32 +1,84 @@
-<ul ng-show="timefilter.enabled" class="nav navbar-nav navbar-right navbar-timepicker">
-  <li>
-    <button
-      ng-click="toggleRefresh()"
-      ng-show="timefilter.refreshInterval.value > 0">
-      <i class="fa" ng-class="timefilter.refreshInterval.pause ? 'fa-play' : 'fa-pause'"></i>
-    </button>
-  </li>
+<div
+  ng-show="timefilterValues.isAutoRefreshSelectorEnabled || timefilterValues.isTimeRangeSelectorEnabled"
+  data-shared-timefilter-from="{{ getSharedTimeFilterFromDate() }}"
+  data-shared-timefilter-to="{{ getSharedTimeFilterToDate() }}"
+  class="kuiLocalMenu"
+  data-test-subj="globalTimepicker"
+>
+  <button
+    class="kuiLocalMenuItem"
+    aria-label="{{ timefilterValues.refreshInterval.pause ? 'Resume refreshing data' : 'Pause refreshing data' }}"
+    ng-click="toggleRefresh()"
+    ng-show="timefilterValues.isAutoRefreshSelectorEnabled && (timefilterValues.refreshInterval.value > 0)"
+    data-test-subj="globalTimepickerAutoRefreshButton"
+    data-test-subj-state="{{ timefilterValues.refreshInterval.pause ? 'inactive' : 'active' }}"
+  >
+    <span
+      class="kuiIcon"
+      aria-hidden="true"
+      ng-class="timefilterValues.refreshInterval.pause ? 'fa-play' : 'fa-pause'"
+    ></span>
+  </button>
 
-  <li
-    ng-show="timefilter.refreshInterval.value > 0 || kbnTopNav.is('interval') || kbnTopNav.is('filter')">
+  <button
+    class="kuiLocalMenuItem navbar-timepicker-auto-refresh-desc"
+    ng-class="{'kuiLocalMenuItem-isSelected': kbnTopNav.isCurrent('interval') }"
+    ng-show="timefilterValues.isAutoRefreshSelectorEnabled"
+    ng-click="kbnTopNav.toggle('interval')"
+  >
+    <span ng-show="timefilterValues.refreshInterval.value === 0">
+      <span aria-hidden="true" class="kuiIcon fa-repeat"></span> Auto-refresh
+    </span>
 
-    <button ng-click="kbnTopNav.toggle('interval')"
-    ng-class="{active: kbnTopNav.is('interval') }"
-    class="navbar-timepicker-auto-refresh-desc">
-      <span ng-show="timefilter.refreshInterval.value === 0"><i class="fa fa-repeat"></i> Auto-refresh</span>
-      <span ng-show="timefilter.refreshInterval.value > 0">{{timefilter.refreshInterval.display}}</span>
-    </button>
+    <span
+      ng-show="timefilterValues.refreshInterval.value > 0"
+      aria-label="Data will refresh every {{timefilterValues.display.refreshInterval}}"
+    >
+      {{ timefilterValues.display.refreshInterval }}
+    </span>
+  </button>
 
-  </li>
+  <button
+    ng-show="timefilterValues.isTimeRangeSelectorEnabled"
+    class="kuiLocalMenuItem"
+    ng-click="back()"
+    aria-label="Move backward in time"
+  >
+    <span
+      class="kuiIcon fa-chevron-left"
+      aria-hidden="true"
+      tooltip="Move backward in time"
+    ></span>
+  </button>
 
-  <li>
-    <button ng-class="{active: kbnTopNav.is('filter')}"
-      ng-click="kbnTopNav.toggle('filter')"
-      aria-haspopup="true"
-      aria-expanded="false"
-      class="navbar-timepicker-time-desc">
-      <i aria-hidden="true" class="fa fa-clock-o"></i>
-      <pretty-duration from="timefilter.time.from" to="timefilter.time.to"></pretty-duration>
-    </button>
-  </li>
-</ul>
+  <button
+    ng-show="timefilterValues.isTimeRangeSelectorEnabled"
+    data-test-subj="globalTimepickerButton"
+    class="kuiLocalMenuItem navbar-timepicker-time-desc"
+    ng-class="{'kuiLocalMenuItem-isSelected': kbnTopNav.isCurrent('filter')}"
+    ng-click="kbnTopNav.toggle('filter')"
+    aria-label="Open time range picker"
+    aria-haspopup="true"
+  >
+    <span aria-hidden="true" class="kuiIcon fa-clock-o"></span>
+    <span
+      aria-label="Current time range is {{timefilterValues.display.time}}"
+      data-test-subj="globalTimepickerRange"
+    >
+      {{timefilterValues.display.time}}
+    </span>
+  </button>
+
+  <button
+    ng-show="timefilterValues.isTimeRangeSelectorEnabled"
+    class="kuiLocalMenuItem"
+    ng-click="forward()"
+    aria-label="Move forward in time"
+  >
+    <span
+      aria-hidden="true"
+      class="kuiIcon fa-chevron-right"
+      tooltip="Move forward in time"
+    ></span>
+  </button>
+</div>

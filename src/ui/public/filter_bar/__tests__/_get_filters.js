@@ -1,15 +1,34 @@
+/*
+ * Licensed to Elasticsearch B.V. under one or more contributor
+ * license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright
+ * ownership. Elasticsearch B.V. licenses this file to you under
+ * the Apache License, Version 2.0 (the "License"); you may
+ * not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 import _ from 'lodash';
 import ngMock from 'ng_mock';
 import expect from 'expect.js';
 import MockState from 'fixtures/mock_state';
-import FilterBarQueryFilterProvider from 'ui/filter_bar/query_filter';
+import { FilterBarQueryFilterProvider } from '../query_filter';
+
 describe('get filters', function () {
-  let storeNames = {
+  const storeNames = {
     app: 'appState',
     global: 'globalState'
   };
   let queryFilter;
-  let $rootScope;
   let appState;
   let globalState;
 
@@ -30,7 +49,6 @@ describe('get filters', function () {
   ));
 
   beforeEach(ngMock.inject(function (_$rootScope_, Private) {
-    $rootScope = _$rootScope_;
     queryFilter = Private(FilterBarQueryFilterProvider);
   }));
 
@@ -55,7 +73,7 @@ describe('get filters', function () {
       expect(res[1]).to.eql(filters[0]);
 
       // should return updated version of filters
-      let newFilter = { query: { match: { '_type': { query: 'nginx', type: 'phrase' } } } };
+      const newFilter = { query: { match: { '_type': { query: 'nginx', type: 'phrase' } } } };
       appState.filters.push(newFilter);
 
       res = queryFilter.getFilters();
@@ -66,13 +84,13 @@ describe('get filters', function () {
       appState.filters = [filters[0]];
       globalState.filters = [filters[1]];
 
-      let res = queryFilter.getFilters();
+      const res = queryFilter.getFilters();
       expect(res[0].$state.store).to.be(storeNames.global);
       expect(res[1].$state.store).to.be(storeNames.app);
     });
 
     it('should return non-null filters from specific states', function () {
-      let states = [
+      const states = [
         [ globalState, queryFilter.getGlobalFilters ],
         [ appState, queryFilter.getAppFilters ],
       ];
@@ -81,14 +99,14 @@ describe('get filters', function () {
         state[0].filters = filters.slice(0);
         expect(state[0].filters).to.contain(null);
 
-        let res = state[1]();
+        const res = state[1]();
         expect(res.length).to.be(state[0].filters.length);
         expect(state[0].filters).to.not.contain(null);
       });
     });
 
     it('should replace the state, not save it', function () {
-      let states = [
+      const states = [
         [ globalState, queryFilter.getGlobalFilters ],
         [ appState, queryFilter.getAppFilters ],
       ];
@@ -102,7 +120,7 @@ describe('get filters', function () {
         expect(state[0].replace.called).to.be(false);
 
         state[0].filters = filters.slice(0);
-        let res = state[1]();
+        state[1]();
         expect(state[0].save.called).to.be(false);
         expect(state[0].replace.called).to.be(true);
       });
@@ -131,11 +149,11 @@ describe('get filters', function () {
 
     it('should skip appState filters that match globalState filters', function () {
       globalState.filters = filters;
-      let appFilter = _.cloneDeep(filters[1]);
+      const appFilter = _.cloneDeep(filters[1]);
       appState.filters.push(appFilter);
 
       // global filters should be listed first
-      let res = queryFilter.getFilters();
+      const res = queryFilter.getFilters();
       expect(res).to.have.length(3);
       _.each(res, function (filter) {
         expect(filter.$state.store).to.be('globalState');
@@ -144,12 +162,12 @@ describe('get filters', function () {
 
     it('should append conflicting appState filters', function () {
       globalState.filters = filters;
-      let appFilter = _.cloneDeep(filters[1]);
+      const appFilter = _.cloneDeep(filters[1]);
       appFilter.meta.negate = true;
       appState.filters.push(appFilter);
 
       // global filters should be listed first
-      let res = queryFilter.getFilters();
+      const res = queryFilter.getFilters();
       expect(res).to.have.length(4);
       expect(res.filter(function (filter) {
         return filter.$state.store === storeNames.global;
@@ -162,7 +180,7 @@ describe('get filters', function () {
     it('should not affect disabled filters', function () {
       // test adding to globalState
       globalState.filters = _.map(filters, function (filter) {
-        let f = _.cloneDeep(filter);
+        const f = _.cloneDeep(filter);
         f.meta.disabled = true;
         return f;
       });
@@ -172,7 +190,7 @@ describe('get filters', function () {
 
       // test adding to appState
       globalState.filters = _.map(filters, function (filter) {
-        let f = _.cloneDeep(filter);
+        const f = _.cloneDeep(filter);
         f.meta.disabled = true;
         return f;
       });

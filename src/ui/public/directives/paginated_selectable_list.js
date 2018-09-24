@@ -1,6 +1,25 @@
+/*
+ * Licensed to Elasticsearch B.V. under one or more contributor
+ * license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright
+ * ownership. Elasticsearch B.V. licenses this file to you under
+ * the Apache License, Version 2.0 (the "License"); you may
+ * not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 import _ from 'lodash';
-import uiModules from 'ui/modules';
-import paginatedSelectableListTemplate from 'ui/partials/paginated_selectable_list.html';
+import { uiModules } from '../modules';
+import paginatedSelectableListTemplate from '../partials/paginated_selectable_list.html';
 
 const module = uiModules.get('kibana');
 
@@ -8,19 +27,20 @@ function throwError(message) {
   throw new Error(message);
 }
 
-module.directive('paginatedSelectableList', function (kbnUrl) {
+module.directive('paginatedSelectableList', function () {
 
   return {
     restrict: 'E',
     scope: {
       perPage: '=?',
       list: '=',
-      listProperty: '=',
+      listProperty: '@',
       userMakeUrl: '=?',
-      userOnSelect: '=?'
+      userOnSelect: '=?',
+      disableAutoFocus: '='
     },
     template: paginatedSelectableListTemplate,
-    controller: function ($scope, $element, $filter) {
+    controller: function ($scope) {
       // Should specify either user-make-url or user-on-select
       if (!$scope.userMakeUrl && !$scope.userOnSelect) {
         throwError('paginatedSelectableList directive expects a makeUrl or onSelect function');
@@ -32,7 +52,7 @@ module.directive('paginatedSelectableList', function (kbnUrl) {
       }
 
       $scope.perPage = $scope.perPage || 10;
-      $scope.hits = $scope.list = _.sortBy($scope.list, accessor);
+      $scope.hits = $scope.list = _.sortBy($scope.list, $scope.accessor);
       $scope.hitCount = $scope.hits.length;
 
       /**
@@ -48,7 +68,7 @@ module.directive('paginatedSelectableList', function (kbnUrl) {
        * @return {Array} Array sorted either ascending or descending
        */
       $scope.sortHits = function (hits) {
-        const sortedList = _.sortBy(hits, accessor);
+        const sortedList = _.sortBy(hits, $scope.accessor);
 
         $scope.isAscending = !$scope.isAscending;
         $scope.hits = $scope.isAscending ? sortedList : sortedList.reverse();
@@ -62,10 +82,10 @@ module.directive('paginatedSelectableList', function (kbnUrl) {
         return $scope.userOnSelect(hit, $event);
       };
 
-      function accessor(val) {
+      $scope.accessor = function (val) {
         const prop = $scope.listProperty;
-        return prop ? val[prop] : val;
-      }
+        return prop ? _.get(val, prop) : val;
+      };
     }
   };
 });

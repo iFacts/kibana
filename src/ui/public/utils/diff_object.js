@@ -1,16 +1,35 @@
+/*
+ * Licensed to Elasticsearch B.V. under one or more contributor
+ * license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright
+ * ownership. Elasticsearch B.V. licenses this file to you under
+ * the Apache License, Version 2.0 (the "License"); you may
+ * not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 import _ from 'lodash';
 import angular from 'angular';
 
-export default function (target, source) {
+export function applyDiff(target, source) {
 
-  let diff = {};
+  const diff = {};
 
   /**
    * Filter the private vars
    * @param {string} key The keys
    * @returns {boolean}
    */
-  let filterPrivateAndMethods = function (obj) {
+  const filterPrivateAndMethods = function (obj) {
     return function (key) {
       if (_.isFunction(obj[key])) return false;
       if (key.charAt(0) === '$') return false;
@@ -18,8 +37,8 @@ export default function (target, source) {
     };
   };
 
-  let targetKeys = _.keys(target).filter(filterPrivateAndMethods(target));
-  let sourceKeys = _.keys(source).filter(filterPrivateAndMethods(source));
+  const targetKeys = _.keys(target).filter(filterPrivateAndMethods(target));
+  const sourceKeys = _.keys(source).filter(filterPrivateAndMethods(source));
 
   // Find the keys to be removed
   diff.removed = _.difference(targetKeys, sourceKeys);
@@ -47,4 +66,4 @@ export default function (target, source) {
 
   return diff;
 
-};
+}

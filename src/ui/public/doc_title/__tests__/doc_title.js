@@ -1,12 +1,31 @@
+/*
+ * Licensed to Elasticsearch B.V. under one or more contributor
+ * license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright
+ * ownership. Elasticsearch B.V. licenses this file to you under
+ * the Apache License, Version 2.0 (the "License"); you may
+ * not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 import _ from 'lodash';
-import sinon from 'auto-release-sinon';
+import sinon from 'sinon';
 import expect from 'expect.js';
 import ngMock from 'ng_mock';
-import DocTitleProvider from 'ui/doc_title';
+import { DocTitleProvider } from '..';
 
 describe('docTitle Service', function () {
   let initialDocTitle;
-  let MAIN_TITLE = 'Kibana 4';
+  const MAIN_TITLE = 'Kibana 4';
 
   let docTitle;
   let $rootScope;
@@ -36,9 +55,9 @@ describe('docTitle Service', function () {
 
   describe('setup', function () {
     it('resets the title when a route change begins', function () {
-      let spy = $rootScope.$on;
+      const spy = $rootScope.$on;
 
-      let found = spy.args.some(function (args) {
+      const found = spy.args.some(function (args) {
         return args[0] === '$routeChangeStart' && args[1] === docTitle.reset;
       });
 
@@ -61,23 +80,10 @@ describe('docTitle Service', function () {
   });
 
   describe('#change', function () {
-    let getActiveTabStub;
-
-    beforeEach(function () {
-      getActiveTabStub = sinon.stub(require('ui/chrome'), 'getActiveTab');
-    });
-
     it('writes the first param to as the first part of the doc name', function () {
       expect(document.title).to.be(MAIN_TITLE);
       docTitle.change('some secondary title');
       expect(document.title).to.be('some secondary title - ' + MAIN_TITLE);
-    });
-
-    it('includes the title of the active tab if available', function () {
-      expect(document.title).to.be(MAIN_TITLE);
-      getActiveTabStub.returns({ title: 'fancy pants' });
-      docTitle.change('some secondary title');
-      expect(document.title).to.be('some secondary title - fancy pants - ' + MAIN_TITLE);
     });
 
     it('will write just the first param if the second param is true', function () {

@@ -1,16 +1,34 @@
+/*
+ * Licensed to Elasticsearch B.V. under one or more contributor
+ * license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright
+ * ownership. Elasticsearch B.V. licenses this file to you under
+ * the Apache License, Version 2.0 (the "License"); you may
+ * not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 import _ from 'lodash';
 import ngMock from 'ng_mock';
 import expect from 'expect.js';
 import sinon from 'sinon';
-import Notifier from 'ui/notify/notifier';
+import { Notifier } from '..';
+import { metadata } from 'ui/metadata';
 
 describe('Notifier', function () {
   let $interval;
-  let message = 'Oh, the humanity!';
   let notifier;
   let params;
-  let version = window.__KBN__.version;
-  let buildNum = window.__KBN__.buildNum;
+  const message = 'Oh, the humanity!';
 
   beforeEach(function () {
     ngMock.module('kibana');
@@ -22,8 +40,11 @@ describe('Notifier', function () {
 
   beforeEach(function () {
     params = { location: 'foo' };
-    while (Notifier.prototype._notifs.pop()); // clear global notifications
     notifier = new Notifier(params);
+  });
+
+  afterEach(function () {
+    Notifier.prototype._notifs.length = 0;
   });
 
   describe('#constructor()', function () {
@@ -56,7 +77,7 @@ describe('Notifier', function () {
     });
 
     it('sets timeRemaining and decrements', function () {
-      let notif = notify('error');
+      const notif = notify('error');
 
       expect(notif.timeRemaining).to.equal(300);
       $interval.flush(1000);
@@ -64,8 +85,8 @@ describe('Notifier', function () {
     });
 
     it('closes notification on lifetime expiry', function () {
-      let expectation = sinon.mock();
-      let notif = notifier.error(message, expectation);
+      const expectation = sinon.mock();
+      const notif = notifier.error(message, expectation);
 
       expectation.once();
       expectation.withExactArgs('ignore');
@@ -76,7 +97,7 @@ describe('Notifier', function () {
     });
 
     it('allows canceling of timer', function () {
-      let notif = notify('error');
+      const notif = notify('error');
 
       expect(notif.timerId).to.not.be(undefined);
       notif.cancelTimer();
@@ -85,7 +106,7 @@ describe('Notifier', function () {
     });
 
     it('resets timer on addition to stack', function () {
-      let notif = notify('error');
+      const notif = notify('error');
 
       $interval.flush(100000);
       expect(notif.timeRemaining).to.equal(200);
@@ -95,98 +116,31 @@ describe('Notifier', function () {
     });
 
     it('allows reporting', function () {
-      let includesReport = _.includes(notify('error').actions, 'report');
+      const includesReport = _.includes(notify('error').actions, 'report');
       expect(includesReport).to.true;
     });
 
     it('allows accepting', function () {
-      let includesAccept = _.includes(notify('error').actions, 'accept');
+      const includesAccept = _.includes(notify('error').actions, 'accept');
       expect(includesAccept).to.true;
     });
 
     it('includes stack', function () {
       expect(notify('error').stack).to.be.defined;
     });
-  });
 
-  describe('#warning', function () {
-    testVersionInfo('warning');
-
-    it('prepends location to message for content', function () {
-      expect(notify('warning').content).to.equal(params.location + ': ' + message);
-    });
-
-    it('sets type to "warning"', function () {
-      expect(notify('warning').type).to.equal('warning');
-    });
-
-    it('sets icon to "warning"', function () {
-      expect(notify('warning').icon).to.equal('warning');
-    });
-
-    it('sets title to "Warning"', function () {
-      expect(notify('warning').title).to.equal('Warning');
-    });
-
-    it('sets lifetime to 10000', function () {
-      expect(notify('warning').lifetime).to.equal(10000);
-    });
-
-    it('does not allow reporting', function () {
-      let includesReport = _.includes(notify('warning').actions, 'report');
-      expect(includesReport).to.false;
-    });
-
-    it('allows accepting', function () {
-      let includesAccept = _.includes(notify('warning').actions, 'accept');
-      expect(includesAccept).to.true;
-    });
-
-    it('does not include stack', function () {
-      expect(notify('warning').stack).not.to.be.defined;
+    it('has css class helper functions', function () {
+      expect(notify('error').getIconClass()).to.equal('fa fa-warning');
+      expect(notify('error').getButtonClass()).to.equal('kuiButton--danger');
+      expect(notify('error').getAlertClassStack()).to.equal('toast-stack alert alert-danger');
+      expect(notify('error').getAlertClass()).to.equal('toast alert alert-danger');
+      expect(notify('error').getButtonGroupClass()).to.equal('toast-controls');
+      expect(notify('error').getToastMessageClass()).to.equal('toast-message');
     });
   });
 
-  describe('#info', function () {
-    testVersionInfo('info');
-
-    it('prepends location to message for content', function () {
-      expect(notify('info').content).to.equal(params.location + ': ' + message);
-    });
-
-    it('sets type to "info"', function () {
-      expect(notify('info').type).to.equal('info');
-    });
-
-    it('sets icon to "info-circle"', function () {
-      expect(notify('info').icon).to.equal('info-circle');
-    });
-
-    it('sets title to "Debug"', function () {
-      expect(notify('info').title).to.equal('Debug');
-    });
-
-    it('sets lifetime to 5000', function () {
-      expect(notify('info').lifetime).to.equal(5000);
-    });
-
-    it('does not allow reporting', function () {
-      let includesReport = _.includes(notify('info').actions, 'report');
-      expect(includesReport).to.false;
-    });
-
-    it('allows accepting', function () {
-      let includesAccept = _.includes(notify('info').actions, 'accept');
-      expect(includesAccept).to.true;
-    });
-
-    it('does not include stack', function () {
-      expect(notify('info').stack).not.to.be.defined;
-    });
-  });
-
-  function notify(fnName) {
-    notifier[fnName](message);
+  function notify(fnName, opts) {
+    notifier[fnName](message, opts);
     return latestNotification();
   }
 
@@ -195,16 +149,16 @@ describe('Notifier', function () {
   }
 
   function testVersionInfo(fnName) {
-    context('when version is configured', function () {
+    describe('when version is configured', function () {
       it('adds version to notification', function () {
-        let notification = notify(fnName);
-        expect(notification.info.version).to.equal(version);
+        const notification = notify(fnName);
+        expect(notification.info.version).to.equal(metadata.version);
       });
     });
-    context('when build number is configured', function () {
+    describe('when build number is configured', function () {
       it('adds buildNum to notification', function () {
-        let notification = notify(fnName);
-        expect(notification.info.buildNum).to.equal(buildNum);
+        const notification = notify(fnName);
+        expect(notification.info.buildNum).to.equal(metadata.buildNum);
       });
     });
   }

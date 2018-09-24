@@ -1,19 +1,48 @@
-import cluster from 'cluster';
-const { join, resolve } = require('path');
-const { format: formatUrl } = require('url');
-import Hapi from 'hapi';
-const { debounce, compact, get, invoke, bindAll, once, sample, uniq } = require('lodash');
+/*
+ * Licensed to Elasticsearch B.V. under one or more contributor
+ * license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright
+ * ownership. Elasticsearch B.V. licenses this file to you under
+ * the Apache License, Version 2.0 (the "License"); you may
+ * not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
+import { resolve } from 'path';
+import { debounce, invoke, bindAll, once, uniq } from 'lodash';
+import { fromEvent, race } from 'rxjs';
+import { first } from 'rxjs/operators';
 
 import Log from '../log';
 import Worker from './worker';
-import BasePathProxy from './base_path_proxy';
+import { Config } from '../../server/config/config';
+import { transformDeprecations } from '../../server/config/transform_deprecations';
 
 process.env.kbnWorkerType = 'managr';
 
-module.exports = class ClusterManager {
-  constructor(opts = {}, settings = {}) {
+export default class ClusterManager {
+  static create(opts, settings = {}, basePathProxy) {
+    return new ClusterManager(
+      opts,
+      Config.withDefaultSchema(transformDeprecations(settings)),
+      basePathProxy
+    );
+  }
+
+  constructor(opts, config, basePathProxy) {
     this.log = new Log(opts.quiet, opts.silent);
     this.addedCount = 0;
+    this.inReplMode = !!opts.repl;
+    this.basePathProxy = basePathProxy;
 
     const serverArgv = [];
     const optimizerArgv = [
@@ -21,16 +50,16 @@ module.exports = class ClusterManager {
       '--server.autoListen=false',
     ];
 
-    if (opts.basePath) {
-      this.basePathProxy = new BasePathProxy(this, settings);
-
+    if (this.basePathProxy) {
       optimizerArgv.push(
-        `--server.basePath=${this.basePathProxy.basePath}`
+        `--server.basePath=${this.basePathProxy.basePath}`,
+        '--server.rewriteBasePath=true',
       );
 
       serverArgv.push(
         `--server.port=${this.basePathProxy.targetPort}`,
-        `--server.basePath=${this.basePathProxy.basePath}`
+        `--server.basePath=${this.basePathProxy.basePath}`,
+        '--server.rewriteBasePath=true',
       );
     }
 
@@ -64,10 +93,25 @@ module.exports = class ClusterManager {
     bindAll(this, 'onWatcherAdd', 'onWatcherError', 'onWatcherChange');
 
     if (opts.watch) {
-      this.setupWatching([
-        ...settings.plugins.paths,
-        ...settings.plugins.scanDirs
-      ]);
+      const pluginPaths = config.get('plugins.paths');
+      const scanDirs = config.get('plugins.scanDirs');
+      const extraPaths = [
+        ...pluginPaths,
+        ...scanDirs,
+      ];
+
+      const extraIgnores = scanDirs
+        .map(scanDir => resolve(scanDir, '*'))
+        .concat(pluginPaths)
+        .reduce((acc, path) => acc.concat(
+          resolve(path, 'test'),
+          resolve(path, 'build'),
+          resolve(path, 'target'),
+          resolve(path, 'scripts'),
+          resolve(path, 'docs'),
+        ), []);
+
+      this.setupWatching(extraPaths, extraIgnores);
     }
 
     else this.startCluster();
@@ -77,29 +121,37 @@ module.exports = class ClusterManager {
     this.setupManualRestart();
     invoke(this.workers, 'start');
     if (this.basePathProxy) {
-      this.basePathProxy.listen();
+      this.basePathProxy.start({
+        blockUntil: this.blockUntil.bind(this),
+        shouldRedirectFromOldBasePath: this.shouldRedirectFromOldBasePath.bind(this),
+      });
     }
   }
 
-  setupWatching(extraPaths) {
+  setupWatching(extraPaths, extraIgnores) {
     const chokidar = require('chokidar');
-    const fromRoot = require('../../utils/from_root');
+    const { fromRoot } = require('../../utils');
 
-    const watchPaths = uniq(
-      [
-        fromRoot('src/plugins'),
-        fromRoot('src/server'),
-        fromRoot('src/ui'),
-        fromRoot('src/utils'),
-        fromRoot('config'),
-        ...extraPaths
-      ]
-      .map(path => resolve(path))
-    );
+    const watchPaths = [
+      fromRoot('src/core_plugins'),
+      fromRoot('src/server'),
+      fromRoot('src/ui'),
+      fromRoot('src/utils'),
+      fromRoot('x-pack/common'),
+      fromRoot('x-pack/plugins'),
+      fromRoot('x-pack/server'),
+      fromRoot('x-pack/webpackShims'),
+      fromRoot('config'),
+      ...extraPaths
+    ].map(path => resolve(path));
 
-    this.watcher = chokidar.watch(watchPaths, {
+    this.watcher = chokidar.watch(uniq(watchPaths), {
       cwd: fromRoot('.'),
-      ignored: /[\\\/](\..*|node_modules|bower_components|public|__tests__)[\\\/]/
+      ignored: [
+        /[\\\/](\..*|node_modules|bower_components|public|__[a-z0-9_]+__|coverage)[\\\/]/,
+        /\.test\.js$/,
+        ...extraIgnores
+      ]
     });
 
     this.watcher.on('add', this.onWatcherAdd);
@@ -116,6 +168,12 @@ module.exports = class ClusterManager {
   }
 
   setupManualRestart() {
+    // If we're in REPL mode, the user can use the REPL to manually restart.
+    // The setupManualRestart method interferes with stdin/stdout, in a way
+    // that negatively affects the REPL.
+    if (this.inReplMode) {
+      return;
+    }
     const readline = require('readline');
     const rl = readline.createInterface(process.stdin, process.stdout);
 
@@ -126,7 +184,7 @@ module.exports = class ClusterManager {
     rl.setPrompt('');
     rl.prompt();
 
-    rl.on('line', line => {
+    rl.on('line', () => {
       nls = nls + 1;
 
       if (nls >= 2) {
@@ -158,4 +216,23 @@ module.exports = class ClusterManager {
     this.log.bad('failed to watch files!\n', err.stack);
     process.exit(1); // eslint-disable-line no-process-exit
   }
-};
+
+  shouldRedirectFromOldBasePath(path) {
+    const isApp = path.startsWith('app/');
+    const isKnownShortPath = ['login', 'logout', 'status'].includes(path);
+
+    return isApp || isKnownShortPath;
+  }
+
+  blockUntil() {
+    // Wait until `server` worker either crashes or starts to listen.
+    if (this.server.listening || this.server.crashed) {
+      return Promise.resolve();
+    }
+
+    return race(
+      fromEvent(this.server, 'listening'),
+      fromEvent(this.server, 'crashed')
+    ).pipe(first()).toPromise();
+  }
+}

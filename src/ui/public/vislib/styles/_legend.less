@@ -6,10 +6,8 @@ visualize-legend {
   flex-direction: row;
 }
 
-.legend-icon {
-  color: #BEBEBE;
-  font-size: 1.2em;
-  margin: 1px;
+.legend-collapse-button {
+  align-self: flex-start;
 }
 
 .legend-col-wrapper {
@@ -20,22 +18,26 @@ visualize-legend {
   flex-direction: row;
   padding-top: 5px;
 
+  .vislib-container--legend-left & {
+    flex-direction: row-reverse;
+  }
+  .vislib-container--legend-right & {
+    flex-direction: row;
+  }
+  .vislib-container--legend-top & {
+    flex-direction: column-reverse;
+    width: 100%;
+    padding-left: 25px;
+  }
+  .vislib-container--legend-bottom & {
+    flex-direction: column;
+    width: 100%;
+    padding-left: 25px;
+  }
+
   .header {
     cursor: pointer;
     width: 15px;
-  }
-
-  .legend-toggle {
-    &:hover {
-      color: @sidebar-hover-color;
-    }
-
-    padding-right: 5px;
-    font-size: 14px;
-  }
-
-  .column-labels {
-    text-align: right;
   }
 
   .legend-ul {
@@ -54,6 +56,16 @@ visualize-legend {
     text-align: left;
 
     flex-direction: column;
+
+    .vislib-container--legend-top &,
+    .vislib-container--legend-bottom & {
+      width: auto;
+      overflow-y: hidden;
+
+      .legend-value {
+        display: inline-block;
+      }
+    }
   }
 
   .legend-ul.hidden {
@@ -62,7 +74,12 @@ visualize-legend {
 }
 
 .legend-value {
-  &-title {
+  &:hover {
+    cursor: pointer;
+  }
+}
+
+  .legend-value-title {
     padding: 3px;
 
     &:hover {
@@ -70,35 +87,23 @@ visualize-legend {
     }
   }
 
-  &-truncate {
+  .legend-value-truncate {
     overflow-x: hidden;
     white-space: nowrap;
     text-overflow: ellipsis;
   }
 
-  &-full {
+  .legend-value-full {
     white-space: normal;
     word-break: break-all;
     background-color: @sidebar-hover-bg;
   }
 
-  &-details {
+  .legend-value-details {
     border-bottom: 1px solid @sidebar-bg;
-
-    .filter-button {
-      display: block;
-      float: left;
-      width: 50%;
-      border-radius: 0px;
-      background-color: @sidebar-bg;
-
-      &:hover {
-        background-color: @sidebar-hover-bg;
-      }
-    }
   }
 
-  &-color-picker {
+  .legend-value-color-picker {
     width: 130px;
     margin: auto;
 
@@ -113,8 +118,35 @@ visualize-legend {
       font-size: 18px
     }
   }
-}
 
-.legend-value:hover {
-  cursor: pointer;
+// SASSTODO: Make sure these colors convert to theme variables
+.tab-dashboard.theme-dark {
+  .legend {
+    background-color: #272727;
+  }
+
+  .legend-col-wrapper {
+
+    .legend-ul {
+      border-left-color: @gray7;
+      color: @gray10;
+    }
+
+  }
+
+  .legend-value-title {
+    padding: 3px;
+
+    &:hover {
+      background-color: darken(@gray7, 5%);
+    }
+  }
+
+  .legend-value-full {
+    background-color: @gray3;
+  }
+
+  .legend-value-details {
+    border-bottom: 1px solid @gray7;
+  }
 }

@@ -1,38 +1,69 @@
+/*
+ * Licensed to Elasticsearch B.V. under one or more contributor
+ * license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright
+ * ownership. Elasticsearch B.V. licenses this file to you under
+ * the Apache License, Version 2.0 (the "License"); you may
+ * not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 import _ from 'lodash';
 import rison from 'rison-node';
-import keymap from 'ui/utils/key_map';
-import SavedObjectsSavedObjectRegistryProvider from 'ui/saved_objects/saved_object_registry';
-import uiModules from 'ui/modules';
-import savedObjectFinderTemplate from 'ui/partials/saved_object_finder.html';
-let module = uiModules.get('kibana');
+import { keyMap } from '../utils/key_map';
+import { SavedObjectRegistryProvider } from '../saved_objects/saved_object_registry';
+import { uiModules } from '../modules';
+import savedObjectFinderTemplate from '../partials/saved_object_finder.html';
+
+const module = uiModules.get('kibana');
 
 module.directive('savedObjectFinder', function ($location, $injector, kbnUrl, Private, config) {
 
-  let services = Private(SavedObjectsSavedObjectRegistryProvider).byLoaderPropertiesName;
+  const services = Private(SavedObjectRegistryProvider).byLoaderPropertiesName;
 
   return {
     restrict: 'E',
     scope: {
       type: '@',
-      title: '@?',
       // optional make-url attr, sets the userMakeUrl in our scope
       userMakeUrl: '=?makeUrl',
       // optional on-choose attr, sets the userOnChoose in our scope
-      userOnChoose: '=?onChoose'
+      userOnChoose: '=?onChoose',
+      // optional useLocalManagement attr,  removes link to management section
+      useLocalManagement: '=?useLocalManagement',
+      /**
+       * @type {function} - an optional function. If supplied an `Add new X` button is shown
+       * and this function is called when clicked.
+       */
+      onAddNew: '=',
+      /**
+       * @{type} boolean - set this to true, if you don't want the search box above the
+       * table to automatically gain focus once loaded
+       */
+      disableAutoFocus: '='
     },
     template: savedObjectFinderTemplate,
     controllerAs: 'finder',
-    controller: function ($scope, $element, $timeout) {
-      let self = this;
+    controller: function ($scope, $element) {
+      const self = this;
 
       // the text input element
-      let $input = $element.find('input[ng-model=filter]');
+      const $input = $element.find('input[ng-model=filter]');
 
       // The number of items to show in the list
       $scope.perPage = config.get('savedObjects:perPage');
 
       // the list that will hold the suggestions
-      let $list = $element.find('ul');
+      const $list = $element.find('ul');
 
       // the current filter string, used to check that returned results are still useful
       let currentFilter = $scope.filter;
@@ -95,7 +126,7 @@ module.directive('savedObjectFinder', function ($location, $injector, kbnUrl, Pr
           $scope.userOnChoose(hit, $event);
         }
 
-        let url = self.makeUrl(hit);
+        const url = self.makeUrl(hit);
         if (!url || url === '#' || url.charAt(0) !== '#') return;
 
         $event.preventDefault();
@@ -111,6 +142,13 @@ module.directive('savedObjectFinder', function ($location, $injector, kbnUrl, Pr
         filterResults();
       });
 
+      $scope.pageFirstItem = 0;
+      $scope.pageLastItem = 0;
+      $scope.onPageChanged = (page) => {
+        $scope.pageFirstItem = page.firstItem;
+        $scope.pageLastItem = page.lastItem;
+      };
+
       //manages the state of the keyboard selector
       self.selector = {
         enabled: false,
@@ -119,21 +157,11 @@ module.directive('savedObjectFinder', function ($location, $injector, kbnUrl, Pr
 
       //key handler for the filter text box
       self.filterKeyDown = function ($event) {
-        switch (keymap[$event.keyCode]) {
-          case 'tab':
-            if (self.hitCount === 0) return;
-
-            self.selector.index = 0;
-            self.selector.enabled = true;
-
-            selectTopHit();
-
-            $event.preventDefault();
-            break;
+        switch (keyMap[$event.keyCode]) {
           case 'enter':
             if (self.hitCount !== 1) return;
 
-            let hit = self.hits[0];
+            const hit = self.hits[0];
             if (!hit) return;
 
             self.onChoose(hit, $event);
@@ -144,7 +172,7 @@ module.directive('savedObjectFinder', function ($location, $injector, kbnUrl, Pr
 
       //key handler for the list items
       self.hitKeyDown = function ($event, page, paginate) {
-        switch (keymap[$event.keyCode]) {
+        switch (keyMap[$event.keyCode]) {
           case 'tab':
             if (!self.selector.enabled) break;
 
@@ -206,8 +234,8 @@ module.directive('savedObjectFinder', function ($location, $injector, kbnUrl, Pr
           case 'enter':
             if (!self.selector.enabled) break;
 
-            let hitIndex = ((page.number - 1) * paginate.perPage) + self.selector.index;
-            let hit = self.hits[hitIndex];
+            const hitIndex = ((page.number - 1) * paginate.perPage) + self.selector.index;
+            const hit = self.hits[hitIndex];
             if (!hit) break;
 
             self.onChoose(hit, $event);
@@ -221,13 +249,13 @@ module.directive('savedObjectFinder', function ($location, $injector, kbnUrl, Pr
         }
       };
 
-      self.hitBlur = function ($event) {
+      self.hitBlur = function () {
         self.selector.index = -1;
         self.selector.enabled = false;
       };
 
       self.manageObjects = function (type) {
-        $location.url('/settings/objects?_a=' + rison.encode({tab: type}));
+        $location.url('/management/kibana/objects?_a=' + rison.encode({ tab: type }));
       };
 
       self.hitCountNoun = function () {
@@ -249,31 +277,25 @@ module.directive('savedObjectFinder', function ($location, $injector, kbnUrl, Pr
         // but ensure that we don't search for the same
         // thing twice. This is called from multiple places
         // and needs to be smart about when it actually searches
-        let filter = currentFilter;
+        const filter = currentFilter;
         if (prevSearch === filter) return;
 
         prevSearch = filter;
+
+        const isLabsEnabled = config.get('visualize:enableLabs');
         self.service.find(filter)
-        .then(function (hits) {
-          // ensure that we don't display old results
-          // as we can't really cancel requests
-          if (currentFilter === filter) {
-            self.hitCount = hits.total;
-            self.hits = _.sortBy(hits.hits, 'title');
-          }
-        });
-      }
+          .then(function (hits) {
 
-      function scrollIntoView($element, snapTop) {
-        let el = $element[0];
+            hits.hits = hits.hits.filter((hit) => (isLabsEnabled || _.get(hit, 'type.stage') !== 'lab'));
+            hits.total = hits.hits.length;
 
-        if (!el) return;
-
-        if ('scrollIntoViewIfNeeded' in el) {
-          el.scrollIntoViewIfNeeded(snapTop);
-        } else if ('scrollIntoView' in el) {
-          el.scrollIntoView(snapTop);
-        }
+            // ensure that we don't display old results
+            // as we can't really cancel requests
+            if (currentFilter === filter) {
+              self.hitCount = hits.total;
+              self.hits = _.sortBy(hits.hits, 'title');
+            }
+          });
       }
     }
   };

@@ -1,42 +1,72 @@
-<form role="form" class="form-inline">
-  <div class="container-fluid">
-    <div class="row">
-      <div class="input-group form-group finder-form col-md-7">
-        <span class="input-group-addon">
-          <i class="fa fa-search"></i>
-        </span>
+<form
+  role="form"
+  class="kuiVerticalRhythm"
+>
+  <div class="kuiBar">
+    <div class="kuiBarSection">
+      <div class="kuiSearchInput fullWidth">
+        <div class="kuiSearchInput__icon kuiIcon fa-search"></div>
         <input
+          class="kuiSearchInput__input"
           input-focus
+          disable-input-focus="disableAutoFocus"
           ng-model="filter"
-          ng-attr-placeholder="{{finder.properties.nouns | label }} Filter..."
+          ng-attr-placeholder="{{ finder.properties.nouns | label }} Filter..."
           ng-keydown="finder.filterKeyDown($event)"
-          class="form-control"
           name="filter"
           type="text"
-          autocomplete="off" />
+          autocomplete="off"
+          data-test-subj="savedObjectFinderSearchInput"
+        >
       </div>
-      <div class="finder-hit-count col-md-2">
-        <span>{{finder.hitCount}} of {{finder.hitCount}}</span>
-      </div>
-      <div class="finder-manage-object col-md-2">
-        <a class="small" ng-click="finder.manageObjects(finder.properties.name)">
-          Manage {{finder.properties.nouns}}
-        </a>
+    </div>
+
+    <div class="kuiBarSection">
+      <p class="kuiText kuiSubduedText">
+        {{ pageFirstItem }}-{{ pageLastItem }} of {{ finder.hitCount }}
+      </p>
+
+      <div class="kuiButtonGroup">
+        <button
+          class="kuiButton kuiButton--primary"
+          ng-if="onAddNew"
+          ng-click="onAddNew()"
+          data-test-subj="addNewSavedObjectLink"
+        >
+          Add new {{ finder.properties.noun }}
+        </button>
+
+        <button
+          class="kuiButton kuiButton--secondary"
+          ng-if="!useLocalManagement"
+          ng-click="finder.manageObjects(finder.properties.name)"
+        >
+          Manage {{ finder.properties.nouns }}
+        </button>
       </div>
     </div>
   </div>
 </form>
-<paginate list="finder.hits" per-page="20">
+
+<paginate
+  list="finder.hits"
+  per-page="20"
+  class="kuiVerticalRhythm"
+>
+  <button
+    class="paginate-heading list-group-item list-sort-button"
+    ng-click="finder.sortHits(finder.hits)"
+    aria-live="assertive"
+  >
+    <span class="kuiScreenReaderOnly">Sort by</span>
+    Name
+    <span
+      class="fa"
+      ng-class="finder.isAscending ? 'fa-caret-up' : 'fa-caret-down'">
+      <span class="kuiScreenReaderOnly">({{finder.isAscending ? 'ascending' : 'descending'}})</span>
+    </span>
+  </button>
   <ul class="li-striped list-group list-group-menu" ng-class="{'select-mode': finder.selector.enabled}">
-    <li class="list-group-item" ng-click="finder.sortHits(finder.hits)">
-      <span class="paginate-heading">
-        Name
-        <i
-          class="fa"
-          ng-class="finder.isAscending ? 'fa-caret-up' : 'fa-caret-down'">
-        </i>
-      </span>
-    </li>
     <li
       class="list-group-item list-group-menu-item"
       ng-class="{'active': finder.selector.index === $index && finder.selector.enabled}"
@@ -47,7 +77,8 @@
       <a ng-href="{{finder.makeUrl(hit)}}"
           ng-blur="finder.hitBlur($event)"
           ng-click="finder.preventClick($event)">
-          <i aria-hidden="true" class="finder-type fa" ng-if="hit.icon" ng-class="hit.icon"></i>
+          <span aria-hidden="true" class="finder-type fa" ng-if="hit.icon" ng-class="hit.icon"></span>
+          <div class="kuiIcon fa-flask ng-scope" ng-if="hit.type.shouldMarkAsExperimentalInUI()"></div>
           <span>{{hit.title}}</span>
           <p ng-if="hit.description" ng-bind="hit.description"></p>
       </a>

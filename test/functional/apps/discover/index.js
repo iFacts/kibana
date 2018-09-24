@@ -1,20 +1,42 @@
-import { bdd, remote, scenarioManager, defaultTimeout } from '../../../support';
+/*
+ * Licensed to Elasticsearch B.V. under one or more contributor
+ * license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright
+ * ownership. Elasticsearch B.V. licenses this file to you under
+ * the Apache License, Version 2.0 (the "License"); you may
+ * not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
 
-(function () {
-  bdd.describe('discover app', function () {
-    this.timeout = defaultTimeout;
+export default function ({ getService, loadTestFile }) {
+  const esArchiver = getService('esArchiver');
+  const remote = getService('remote');
 
-    bdd.before(function () {
-      return remote.setWindowSize(1200,800);
+  describe('discover app', function () {
+    before(function () {
+      return remote.setWindowSize(1200, 800);
     });
 
-    bdd.after(function unloadMakelogs() {
-      return scenarioManager.unload('logstashFunctional');
+    after(function unloadMakelogs() {
+      return esArchiver.unload('logstash_functional');
     });
 
-    require('./_discover');
-    require('./_field_data');
-    require('./_shared_links');
-    require('./_collapse_expand');
+    loadTestFile(require.resolve('./_discover'));
+    loadTestFile(require.resolve('./_errors'));
+    loadTestFile(require.resolve('./_field_data'));
+    loadTestFile(require.resolve('./_shared_links'));
+    loadTestFile(require.resolve('./_sidebar'));
+    loadTestFile(require.resolve('./_source_filters'));
+    loadTestFile(require.resolve('./_large_string'));
+    loadTestFile(require.resolve('./_inspector'));
   });
-}());
+}

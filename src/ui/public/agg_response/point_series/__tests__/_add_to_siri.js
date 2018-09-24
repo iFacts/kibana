@@ -1,19 +1,32 @@
-import expect from 'expect.js';
-import ngMock from 'ng_mock';
-import AggResponsePointSeriesAddToSiriProvider from 'ui/agg_response/point_series/_add_to_siri';
-describe('addToSiri', function () {
-  let addToSiri;
+/*
+ * Licensed to Elasticsearch B.V. under one or more contributor
+ * license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright
+ * ownership. Elasticsearch B.V. licenses this file to you under
+ * the Apache License, Version 2.0 (the "License"); you may
+ * not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
 
-  beforeEach(ngMock.module('kibana'));
-  beforeEach(ngMock.inject(function (Private) {
-    addToSiri = Private(AggResponsePointSeriesAddToSiriProvider);
-  }));
+import expect from 'expect.js';
+import { addToSiri } from '../_add_to_siri';
+
+describe('addToSiri', function () {
 
   it('creates a new series the first time it sees an id', function () {
-    let series = new Map();
-    let point = {};
-    let id = 'id';
-    addToSiri(series, point, id);
+    const series = new Map();
+    const point = {};
+    const id = 'id';
+    addToSiri(series, point, id, id, { id: id });
 
     expect(series.has(id)).to.be(true);
     expect(series.get(id)).to.be.an('object');
@@ -23,14 +36,14 @@ describe('addToSiri', function () {
   });
 
   it('adds points to existing series if id has been seen', function () {
-    let series = new Map();
-    let id = 'id';
+    const series = new Map();
+    const id = 'id';
 
-    let point = {};
-    addToSiri(series, point, id);
+    const point = {};
+    addToSiri(series, point, id, id, { id: id });
 
-    let point2 = {};
-    addToSiri(series, point2, id);
+    const point2 = {};
+    addToSiri(series, point2, id, id, { id: id });
 
     expect(series.has(id)).to.be(true);
     expect(series.get(id)).to.be.an('object');
@@ -41,11 +54,11 @@ describe('addToSiri', function () {
   });
 
   it('allows overriding the series label', function () {
-    let series = new Map();
-    let id = 'id';
-    let label = 'label';
-    let point = {};
-    addToSiri(series, point, id, label);
+    const series = new Map();
+    const id = 'id';
+    const label = 'label';
+    const point = {};
+    addToSiri(series, point, id, label, { id: id });
 
     expect(series.has(id)).to.be(true);
     expect(series.get(id)).to.be.an('object');

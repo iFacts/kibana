@@ -1,6 +1,26 @@
-import SimpleEmitter from 'ui/utils/simple_emitter';
+/*
+ * Licensed to Elasticsearch B.V. under one or more contributor
+ * license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright
+ * ownership. Elasticsearch B.V. licenses this file to you under
+ * the Apache License, Version 2.0 (the "License"); you may
+ * not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
+import { SimpleEmitter } from '../simple_emitter';
 import expect from 'expect.js';
-import sinon from 'auto-release-sinon';
+import sinon from 'sinon';
+
 describe('SimpleEmitter class', function () {
   let emitter;
 
@@ -40,7 +60,7 @@ describe('SimpleEmitter class', function () {
 
   describe('#on', function () {
     it('registers a handler', function () {
-      let handler = sinon.stub();
+      const handler = sinon.stub();
       emitter.on('a', handler);
       expect(emitter.listenerCount('a')).to.be(1);
 
@@ -56,7 +76,7 @@ describe('SimpleEmitter class', function () {
     });
 
     it('allows the same function to be registered multiple times', function () {
-      let handler = function () {};
+      const handler = function () {};
       emitter.on('a', handler);
       expect(emitter.listenerCount()).to.be(1);
       emitter.on('a', handler);
@@ -66,7 +86,7 @@ describe('SimpleEmitter class', function () {
 
   describe('#off', function () {
     it('removes a listener if it was registered', function () {
-      let handler = sinon.stub();
+      const handler = sinon.stub();
       expect(emitter.listenerCount()).to.be(0);
       emitter.on('a', handler);
       expect(emitter.listenerCount('a')).to.be(1);
@@ -94,18 +114,18 @@ describe('SimpleEmitter class', function () {
   describe('#emit', function () {
     it('calls the handlers in the order they were defined', function () {
       let i = 0;
-      let incr = function () { return ++i; };
-      let one = sinon.spy(incr);
-      let two = sinon.spy(incr);
-      let three = sinon.spy(incr);
-      let four = sinon.spy(incr);
+      const incr = function () { return ++i; };
+      const one = sinon.spy(incr);
+      const two = sinon.spy(incr);
+      const three = sinon.spy(incr);
+      const four = sinon.spy(incr);
 
       emitter
-      .on('a', one)
-      .on('a', two)
-      .on('a', three)
-      .on('a', four)
-      .emit('a');
+        .on('a', one)
+        .on('a', two)
+        .on('a', three)
+        .on('a', four)
+        .emit('a');
 
       expect(one).to.have.property('callCount', 1);
       expect(one.returned(1)).to.be.ok();
@@ -122,11 +142,11 @@ describe('SimpleEmitter class', function () {
 
     it('always emits the handlers that were initially registered', function () {
 
-      let destructive = sinon.spy(function () {
+      const destructive = sinon.spy(function () {
         emitter.removeAllListeners();
         expect(emitter.listenerCount()).to.be(0);
       });
-      let stub = sinon.stub();
+      const stub = sinon.stub();
 
       emitter.on('run', destructive).on('run', stub).emit('run');
 
@@ -136,20 +156,20 @@ describe('SimpleEmitter class', function () {
 
     it('applies all arguments except the first', function () {
       emitter
-      .on('a', function (a, b, c) {
-        expect(a).to.be('foo');
-        expect(b).to.be('bar');
-        expect(c).to.be('baz');
-      })
-      .emit('a', 'foo', 'bar', 'baz');
+        .on('a', function (a, b, c) {
+          expect(a).to.be('foo');
+          expect(b).to.be('bar');
+          expect(c).to.be('baz');
+        })
+        .emit('a', 'foo', 'bar', 'baz');
     });
 
     it('uses the SimpleEmitter as the this context', function () {
       emitter
-      .on('a', function () {
-        expect(this).to.be(emitter);
-      })
-      .emit('a');
+        .on('a', function () {
+          expect(this).to.be(emitter);
+        })
+        .emit('a');
     });
   });
 });

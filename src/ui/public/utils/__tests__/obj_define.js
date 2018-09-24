@@ -1,5 +1,24 @@
+/*
+ * Licensed to Elasticsearch B.V. under one or more contributor
+ * license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright
+ * ownership. Elasticsearch B.V. licenses this file to you under
+ * the Apache License, Version 2.0 (the "License"); you may
+ * not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 import expect from 'expect.js';
-import ObjDefine from 'ui/utils/obj_define';
+import { ObjDefine } from '../obj_define';
 
 describe('ObjDefine Utility', function () {
 
@@ -9,10 +28,10 @@ describe('ObjDefine Utility', function () {
 
   describe('#writ', function () {
     it('creates writeable properties', function () {
-      let def = new ObjDefine();
+      const def = new ObjDefine();
       def.writ('name', 'foo');
 
-      let obj = def.create();
+      const obj = def.create();
       expect(obj).to.have.property('name', 'foo');
 
       obj.name = 'bar';
@@ -20,13 +39,13 @@ describe('ObjDefine Utility', function () {
     });
 
     it('exports the property to JSON', function () {
-      let def = new ObjDefine();
+      const def = new ObjDefine();
       def.writ('name', 'foo');
       expect(flatten(def.create())).to.have.property('name', 'foo');
     });
 
     it('does not export property to JSON it it\'s undefined or null', function () {
-      let def = new ObjDefine();
+      const def = new ObjDefine();
       def.writ('name');
       expect(flatten(def.create())).to.not.have.property('name');
 
@@ -35,10 +54,10 @@ describe('ObjDefine Utility', function () {
     });
 
     it('switched to exporting if a value is written', function () {
-      let def = new ObjDefine();
+      const def = new ObjDefine();
       def.writ('name');
 
-      let obj = def.create();
+      const obj = def.create();
       expect(flatten(obj)).to.not.have.property('name');
 
       obj.name = null;
@@ -49,10 +68,10 @@ describe('ObjDefine Utility', function () {
     });
 
     it('setting a writ value to null prevents it from exporting', function () {
-      let def = new ObjDefine();
+      const def = new ObjDefine();
       def.writ('name', 'foo');
 
-      let obj = def.create();
+      const obj = def.create();
       expect(flatten(obj)).to.have.property('name', 'foo');
 
       obj.name = null;
@@ -63,11 +82,11 @@ describe('ObjDefine Utility', function () {
 
   describe('#fact', function () {
     it('creates an immutable field', function () {
-      let def = new ObjDefine();
-      let val = 'foo';
-      let notval = 'bar';
+      const def = new ObjDefine();
+      const val = 'foo';
+      const notval = 'bar';
       def.fact('name', val);
-      let obj = def.create();
+      const obj = def.create();
 
 
       obj.name = notval; // UPDATE SHOULD BE IGNORED
@@ -75,7 +94,7 @@ describe('ObjDefine Utility', function () {
     });
 
     it('exports the fact to JSON', function () {
-      let def = new ObjDefine();
+      const def = new ObjDefine();
       def.fact('name', 'foo');
       expect(flatten(def.create())).to.have.property('name', 'foo');
     });
@@ -83,11 +102,11 @@ describe('ObjDefine Utility', function () {
 
   describe('#comp', function () {
     it('creates an immutable field', function () {
-      let def = new ObjDefine();
-      let val = 'foo';
-      let notval = 'bar';
+      const def = new ObjDefine();
+      const val = 'foo';
+      const notval = 'bar';
       def.comp('name', val);
-      let obj = def.create();
+      const obj = def.create();
 
       expect(function () {
         'use strict'; // eslint-disable-line strict
@@ -97,7 +116,7 @@ describe('ObjDefine Utility', function () {
     });
 
     it('does not export the computed value to JSON', function () {
-      let def = new ObjDefine();
+      const def = new ObjDefine();
       def.comp('name', 'foo');
       expect(flatten(def.create())).to.not.have.property('name');
     });
@@ -108,24 +127,24 @@ describe('ObjDefine Utility', function () {
     it('creates object that inherits from the prototype', function () {
       function SomeClass() {}
 
-      let def = new ObjDefine(null, SomeClass.prototype);
-      let obj = def.create();
+      const def = new ObjDefine(null, SomeClass.prototype);
+      const obj = def.create();
 
       expect(obj).to.be.a(SomeClass);
     });
 
     it('uses the defaults for property values', function () {
-      let def = new ObjDefine({ name: 'bar' });
+      const def = new ObjDefine({ name: 'bar' });
       def.fact('name');
 
-      let obj = def.create();
+      const obj = def.create();
 
       expect(obj).to.have.property('name', 'bar');
     });
 
-    it('ignores default values that are not defined propertyes', function () {
-      let def = new ObjDefine({ name: 'foo', name2: 'bar' });
-      let obj = def.create();
+    it('ignores default values that are not defined properties', function () {
+      const def = new ObjDefine({ name: 'foo', name2: 'bar' });
+      const obj = def.create();
 
       expect(obj).to.not.have.property('name');
       expect(obj).to.not.have.property('name2');

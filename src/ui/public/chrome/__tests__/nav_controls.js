@@ -1,17 +1,35 @@
+/*
+ * Licensed to Elasticsearch B.V. under one or more contributor
+ * license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright
+ * ownership. Elasticsearch B.V. licenses this file to you under
+ * the Apache License, Version 2.0 (the "License"); you may
+ * not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 import ngMock from 'ng_mock';
 import $ from 'jquery';
 import expect from 'expect.js';
 
-import uiModules from 'ui/modules';
-import chromeNavControlsRegistry from 'ui/registry/chrome_nav_controls';
-import Registry from 'ui/registry/_registry';
+import { chromeNavControlsRegistry } from '../../registry/chrome_nav_controls';
+import { uiRegistry } from '../../registry/_registry';
 
 describe('chrome nav controls', function () {
   let compile;
   let stubRegistry;
 
   beforeEach(ngMock.module('kibana', function (PrivateProvider) {
-    stubRegistry = new Registry({
+    stubRegistry = uiRegistry({
       order: ['order']
     });
 
@@ -36,7 +54,7 @@ describe('chrome nav controls', function () {
       };
     });
 
-    let $el = compile();
+    const $el = compile();
     expect($el.find('#testTemplateEl')).to.have.length(1);
   });
 
@@ -63,11 +81,11 @@ describe('chrome nav controls', function () {
       };
     });
 
-    let $el = compile();
+    const $el = compile();
     expect(
       $el.find('.testControl')
-      .toArray()
-      .map(el => el.id)
+        .toArray()
+        .map(el => el.id)
     ).to.eql(['3', '2', '1']);
   });
 });

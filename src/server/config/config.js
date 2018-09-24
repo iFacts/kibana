@@ -1,38 +1,53 @@
-import Promise from 'bluebird';
+/*
+ * Licensed to Elasticsearch B.V. under one or more contributor
+ * license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright
+ * ownership. Elasticsearch B.V. licenses this file to you under
+ * the Apache License, Version 2.0 (the "License"); you may
+ * not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 import Joi from 'joi';
 import _ from 'lodash';
 import override from './override';
-import unset from './unset';
 import createDefaultSchema from './schema';
-import pkg from '../../utils/package_json';
-import clone from './deep_clone_with_buffers';
+import { pkg, unset, deepCloneWithBuffers as clone, IS_KIBANA_DISTRIBUTABLE } from '../../utils';
 
 const schema = Symbol('Joi Schema');
 const schemaExts = Symbol('Schema Extensions');
 const vals = Symbol('config values');
-const pendingSets = Symbol('Pending Settings');
 
-module.exports = class Config {
+export class Config {
   static withDefaultSchema(settings = {}) {
-    return new Config(createDefaultSchema(), settings);
+    const defaultSchema = createDefaultSchema();
+    return new Config(defaultSchema, settings);
   }
 
   constructor(initialSchema, initialSettings) {
     this[schemaExts] = Object.create(null);
     this[vals] = Object.create(null);
-    this[pendingSets] = _.merge(Object.create(null), initialSettings || {});
 
-    if (initialSchema) this.extendSchema(initialSchema);
+    this.extendSchema(initialSchema, initialSettings);
   }
 
-  getPendingSets() {
-    return new Map(_.pairs(this[pendingSets]));
-  }
+  extendSchema(extension, settings, key) {
+    if (!extension) {
+      return;
+    }
 
-  extendSchema(key, extension) {
-    if (key && key.isJoi) {
-      return _.each(key._inner.children, (child) => {
-        this.extendSchema(child.key, child.schema);
+    if (!key) {
+      return _.each(extension._inner.children, (child) => {
+        this.extendSchema(child.schema, _.get(settings, child.key), child.key);
       });
     }
 
@@ -43,13 +58,7 @@ module.exports = class Config {
     _.set(this[schemaExts], key, extension);
     this[schema] = null;
 
-    let initialVals = _.get(this[pendingSets], key);
-    if (initialVals) {
-      this.set(key, initialVals);
-      unset(this[pendingSets], key);
-    } else {
-      this._commit(this[vals]);
-    }
+    this.set(key, settings);
   }
 
   removeSchema(key) {
@@ -59,7 +68,6 @@ module.exports = class Config {
 
     this[schema] = null;
     unset(this[schemaExts], key);
-    unset(this[pendingSets], key);
     unset(this[vals], key);
   }
 
@@ -85,21 +93,22 @@ module.exports = class Config {
     let env = newVals.env;
     delete newVals.env;
     if (_.isObject(env)) env = env.name;
-    if (!env) env = process.env.NODE_ENV || 'production';
+    if (!env) env = 'production';
 
-    let dev = env === 'development';
-    let prod = env === 'production';
+    const dev = env === 'development';
+    const prod = env === 'production';
 
     // pass the environment as context so that it can be refed in config
-    let context = {
+    const context = {
       env: env,
       prod: prod,
       dev: dev,
       notProd: !prod,
       notDev: !dev,
       version: _.get(pkg, 'version'),
-      buildNum: dev ? Math.pow(2, 53) - 1 : _.get(pkg, 'build.number', NaN),
-      buildSha: dev ? 'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX' : _.get(pkg, 'build.sha', '')
+      branch: _.get(pkg, 'branch'),
+      buildNum: IS_KIBANA_DISTRIBUTABLE ? pkg.build.number : Number.MAX_SAFE_INTEGER,
+      buildSha: IS_KIBANA_DISTRIBUTABLE ? pkg.build.sha : 'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX'
     };
 
     if (!context.dev && !context.prod) {
@@ -108,7 +117,10 @@ module.exports = class Config {
       );
     }
 
-    let results = Joi.validate(newVals, this.getSchema(), { context });
+    const results = Joi.validate(newVals, this.getSchema(), {
+      context,
+      abortEarly: false
+    });
 
     if (results.error) {
       throw results.error;
@@ -122,13 +134,24 @@ module.exports = class Config {
       return clone(this[vals]);
     }
 
-    let value = _.get(this[vals], key);
+    const value = _.get(this[vals], key);
     if (value === undefined) {
       if (!this.has(key)) {
         throw new Error('Unknown config key: ' + key);
       }
     }
     return clone(value);
+  }
+
+  getDefault(key) {
+    const schemaKey = Array.isArray(key) ? key.join('.') : key;
+
+    const subSchema = Joi.reach(this.getSchema(), schemaKey);
+    if (!subSchema) {
+      throw new Error(`Unknown config key: ${key}.`);
+    }
+
+    return clone(_.get(Joi.describe(subSchema), 'flags.default'));
   }
 
   has(key) {
@@ -139,7 +162,7 @@ module.exports = class Config {
       // Only go deep on inner objects with children
       if (_.size(schema._inner.children)) {
         for (let i = 0; i < schema._inner.children.length; i++) {
-          let child = schema._inner.children[i];
+          const child = schema._inner.children[i];
           // If the child is an object recurse through it's children and return
           // true if there's a match
           if (child.schema._type === 'object') {
@@ -152,7 +175,7 @@ module.exports = class Config {
       }
     }
 
-    if (_.isArray(key)) {
+    if (Array.isArray(key)) {
       // TODO: add .has() support for array keys
       key = key.join('.');
     }
@@ -182,4 +205,4 @@ module.exports = class Config {
 
     return this[schema];
   }
-};
+}

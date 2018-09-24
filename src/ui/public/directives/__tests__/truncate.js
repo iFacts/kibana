@@ -1,7 +1,25 @@
+/*
+ * Licensed to Elasticsearch B.V. under one or more contributor
+ * license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright
+ * ownership. Elasticsearch B.V. licenses this file to you under
+ * the Apache License, Version 2.0 (the "License"); you may
+ * not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 import angular from 'angular';
 import expect from 'expect.js';
 import ngMock from 'ng_mock';
-import $ from 'jquery';
 import 'plugins/kibana/discover/index';
 
 
@@ -11,7 +29,7 @@ let $scope;
 
 let $elem;
 
-let init = function (text) {
+const init = function (text) {
   // Load the application
   ngMock.module('kibana');
 
@@ -23,7 +41,7 @@ let init = function (text) {
 
     // Create the element
     $elem = angular.element(
-      '<kbn-truncated orig="' + text + '" length="10"></kbn-truncated>'
+      '<kbn-truncated source="' + text + '" length="10"></kbn-truncated>'
     );
 
     // And compile it
@@ -37,6 +55,9 @@ let init = function (text) {
   });
 };
 
+function trimmed(text) {
+  return text.trim().replace(/\s+/g, ' ');
+}
 
 describe('kbnTruncate directive', function () {
 
@@ -47,7 +68,7 @@ describe('kbnTruncate directive', function () {
     });
 
     it('should trim long strings', function (done) {
-      expect($elem.text()).to.be('some strin... more');
+      expect(trimmed($elem.text())).to.be('some … more');
       done();
     });
 
@@ -56,15 +77,15 @@ describe('kbnTruncate directive', function () {
       done();
     });
 
-    it('should should more text if the link is clicked and less text if clicked again', function (done) {
+    it('should show more text if the link is clicked and less text if clicked again', function (done) {
       $scope.toggle();
       $scope.$digest();
-      expect($elem.text()).to.be('some string of text over 10 characters less');
+      expect(trimmed($elem.text())).to.be('some string of text over 10 characters less');
       expect($elem.find('[ng-click="toggle()"]').text()).to.be('less');
 
       $scope.toggle();
       $scope.$digest();
-      expect($elem.text()).to.be('some strin... more');
+      expect(trimmed($elem.text())).to.be('some … more');
       expect($elem.find('[ng-click="toggle()"]').text()).to.be('more');
 
       done();
@@ -79,7 +100,7 @@ describe('kbnTruncate directive', function () {
     });
 
     it('should not trim short strings', function (done) {
-      expect($elem.text()).to.be('short');
+      expect(trimmed($elem.text())).to.be('short');
       done();
     });
 
